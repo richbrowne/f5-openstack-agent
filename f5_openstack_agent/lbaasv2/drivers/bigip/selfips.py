@@ -50,7 +50,9 @@ class BigipSelfIpManager(object):
             if err.response.text.find("must be one of the vlans "
                                       "in the associated route domain") > 0:
                 self.network_helper.add_vlan_to_domain(
-                    name=model['vlan_name'], partition=model['partition'])
+                    bigip,
+                    name=model['vlan_name'],
+                    partition=model['partition'])
                 self.selfip_manager.create(bigip, model)
 
     def assure_bigip_selfip(self, bigip, service, subnetinfo):
@@ -76,7 +78,8 @@ class BigipSelfIpManager(object):
         if self.l2_service.is_common_network(network):
             network_folder = 'Common'
         else:
-            network_folder = service['pool']['tenant_id']
+            network_folder = self.driver.service_adapter.\
+                get_folder_name(service['pool']['tenant_id'])
 
         (network_name, preserve_network_name) = \
             self.l2_service.get_network_name(bigip, network)
@@ -90,7 +93,7 @@ class BigipSelfIpManager(object):
             "partition": network_folder,
             "preserve_vlan_name": preserve_network_name
         }
-        self.create(bigip, model)
+        self.create_bigip_selfip(bigip, model)
         # TO DO: we need to only bind the local SelfIP to the
         # local device... not treat it as if it was floating
         if self.l3_binding:
@@ -126,7 +129,8 @@ class BigipSelfIpManager(object):
             network_folder = 'Common'
             network_name = '/Common/' + network_name
         else:
-            network_folder = subnet['tenant_id']
+            network_folder = self.driver.service_adapter.\
+                get_folder_name(subnet['tenant_id'])
 
         # Select a traffic group for the floating SelfIP
         floating_selfip_name = "gw-" + subnet['id']
@@ -142,7 +146,7 @@ class BigipSelfIpManager(object):
             'partition': network_folder,
             'preserve_vlan_name': preserve_network_name
         }
-        self.create(bigip, model)
+        self.create_bigip_selfip(bigip, model)
 
         if self.l3_binding:
             self.l3_binding.bind_address(subnet_id=subnet['id'],
@@ -181,7 +185,8 @@ class BigipSelfIpManager(object):
         if self.l2_service.is_common_network(network):
             network_folder = 'Common'
         else:
-            network_folder = subnet['tenant_id']
+            network_folder = self.driver.service_adapter.\
+                get_folder_name(subnet['tenant_id'])
 
         floating_selfip_name = "gw-" + subnet['id']
         if self.driver.conf.f5_populate_static_arp:
