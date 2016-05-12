@@ -86,13 +86,13 @@ class SystemHelper(object):
 
     def set_tunnel_sync(self, bigip, enabled=False):
 
-        # if enabled:
-        #    val = 'enable'
-        # else:
-        #    val = 'disable'
-        # db = bigip.sys.dbs.db.load(name='iptunnel.configsync')
-        # db.update(value=val)
-        pass
+        if enabled:
+            val = 'enable'
+        else:
+            val = 'disable'
+        db = bigip.sys.dbs.db.load(name='iptunnel.configsync')
+        db.update(value=val)
+
 
     def get_provision_extramb(self, bigip):
         db = bigip.sys.dbs.db.load(name='provision.extramb')
@@ -120,11 +120,36 @@ class SystemHelper(object):
     def purge_orphaned_folders(self, bigip):
         pass
 
-    def force_root_folder(self, bigip):
-        pass
-
     def purge_orphaned_folders_contents(self, bigip, folders):
         pass
 
-    def purge_folder_contents(self, bigip, folder):
-        pass
+    def purge_folder_contents(self, bigip, folder=None):
+        if not folder:
+            return
+        params = {'params': {'filter': 'partition eq %s' % folder}}
+
+        resource_types = [
+            bigip.ltm.virtuals,
+            bigip.ltm.pools,
+            bigip.ltm.monitor.https,
+            bigip.ltm.monitor.https_s,
+            bigip.ltm.monitor.tcps,
+            bigip.ltm.monitor.gateway_icmps,
+            bigip.ltm.rules,
+            bigip.ltm.snats,
+            bigip.ltm.snatpools,
+            bigip.ltm.snat_translations,
+            bigip.net.arps,
+            bigip.net.selfips,
+            bigip.net.vlans ]
+        for resource_type in resource_types:
+            for resource in resource_type.get_collection():
+                try:
+                    resource.delete()
+                except Exception as e:
+                    LOG.error("Failed to delete resource: %s" %
+                              resource_type)
+
+
+        
+            

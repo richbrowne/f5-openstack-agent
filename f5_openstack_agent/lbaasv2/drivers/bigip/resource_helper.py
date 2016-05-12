@@ -34,7 +34,8 @@ class ResourceType(Enum):
     snatpool = 13
     snat_translation = 14
     selfip = 15
-
+    rule = 16
+    
 
 class BigIPResourceHelper(object):
     u"""Helper class for creating, updating and deleting BIG-IP® resources.
@@ -58,6 +59,8 @@ class BigIPResourceHelper(object):
         u"""Create/update resource (e.g., pool) on a BIG-IP® system.
 
         First checks to see if resource has been created and creates
+
+
         it if not. If the resource is already created, updates resource
         with model attributes.
 
@@ -131,6 +134,23 @@ class BigIPResourceHelper(object):
 
         return resource
 
+    def get_resources(self, bigip, partition=None):
+        resources = []
+        collection = self._collection(bigip)
+        if collection:
+            if partition:
+                params = {'params': {'$filter': 'partition eq %s' % partition}}
+                resources = collection.get_collection(requests_params=params)
+            else:
+                resources = collection.get_collection()
+
+        return resources
+
+    def delete_resources(self, bigip, partition=None):
+        for resource in self.get_resources(bigip,
+                                          partition=partition):
+            resource.delete()
+    
     def _resource(self, bigip):
         return {
             ResourceType.nat: lambda bigip: bigip.ltm.nats.nat,
@@ -155,4 +175,31 @@ class BigIPResourceHelper(object):
                 lambda bigip: bigip.ltm.snat_translations.snat_translation,
             ResourceType.selfip:
                 lambda bigip: bigip.net.selfips.selfip
+        }[self.resource_type](bigip)
+
+    def _collection(self, bigip):
+        return {
+            ResourceType.nat: lambda bigip: bigip.ltm.nats,
+            ResourceType.pool: lambda bigip: bigip.ltm.pools,
+            ResourceType.sys: lambda bigip: bigip.sys,
+            ResourceType.virtual: lambda bigip: bigip.ltm.virtuals,
+            ResourceType.member: lambda bigip: None,
+            ResourceType.folder: lambda bigip: bigip.sys.folders,
+
+            ResourceType.http_monitor:
+                lambda bigip: bigip.ltm.monitor.https,
+            ResourceType.https_monitor:
+                lambda bigip: bigip.ltm.monitor.https_s,
+            ResourceType.tcp_monitor:
+                lambda bigip: bigip.ltm.monitor.tcps,
+            ResourceType.ping_monitor:
+                lambda bigip: bigip.ltm.monitor.gateway_icmps,
+            ResourceType.node: lambda bigip: bigip.ltm.nodes,
+            ResourceType.snat: lambda bigip: bigip.ltm.snats,
+            ResourceType.snatpool:
+                lambda bigip: bigip.ltm.snatpools,
+            ResourceType.snat_translation:
+                lambda bigip: bigip.ltm.snat_translations,
+            ResourceType.selfip:
+                lambda bigip: bigip.net.selfips
         }[self.resource_type](bigip)

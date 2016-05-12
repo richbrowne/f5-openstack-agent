@@ -340,6 +340,8 @@ class iControlDriver(LBaaSBaseDriver):
             except ImportError:
                 LOG.error('Failed to import L3 binding driver: %s'
                           % self.conf.l3_binding_driver)
+            except L3BindingInitializationException:
+                sys.exit(1)
         else:
             LOG.debug('No L3 binding driver configured.'
                       ' No L3 binding will be done.')
@@ -936,7 +938,6 @@ class iControlDriver(LBaaSBaseDriver):
 
         traffic_group = self.service_to_traffic_group(service)
 
-        LOG.debug("XXXXXXXXXX: traffic group created ")
         if self.network_builder:
             start_time = time()
             try:
@@ -954,7 +955,6 @@ class iControlDriver(LBaaSBaseDriver):
                           "took %.5f secs" % (time() - start_time))
 
         all_subnet_hints = {}
-        LOG.debug("XXXXXXXXXX: getting bigip configs")
         for bigip in self.get_config_bigips():
             # check_for_delete_subnets:
             #     keep track of which subnets we should check to delete

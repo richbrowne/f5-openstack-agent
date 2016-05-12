@@ -93,14 +93,9 @@ class BigipTenantManager(object):
                 self.network_helper.delete_route_domain(bigip,
                                                         partition,
                                                         domain_name)
-        # sudslog = std_logging.getLogger('suds.client')
-        # sudslog.setLevel(std_logging.FATAL)
-        self.system_helper.force_root_folder(bigip)
-        # sudslog.setLevel(std_logging.ERROR)
-
         try:
             self.system_helper.delete_folder(bigip, partition)
-        except f5ex.SystemDeleteException:
+        except Exception:
             self.system_helper.purge_folder_contents(bigip, partition)
             self.system_helper.delete_folder(bigip, partition)
 
@@ -112,10 +107,6 @@ class BigipTenantManager(object):
         # the folder or it won't delete due to not being empty
         for set_bigip in self.driver.get_all_bigips():
             self.network_helper.delete_route_domain(set_bigip, partition, None)
-            sudslog = std_logging.getLogger('suds.client')
-            sudslog.setLevel(std_logging.FATAL)
-            self.system_helper.force_root_folder(set_bigip)
-            sudslog.setLevel(std_logging.ERROR)
 
         # we need to ensure that the following folder deletion
         # is clearly the last change that needs to be synced.
@@ -123,7 +114,7 @@ class BigipTenantManager(object):
         greenthread.sleep(5)
         try:
             self.system_helper.delete_folder(bigip, partition)
-        except f5ex.SystemDeleteException:
+        except Exception:
             self.system_helper.purge_folder_contents(bigip, partition)
             self.system_helper.delete_folder(bigip, partition)
 

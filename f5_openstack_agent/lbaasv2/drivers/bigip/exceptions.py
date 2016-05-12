@@ -78,6 +78,10 @@ class L3BindingInitializationException(Exception):
     pass
 
 
+class L3BindAddressException(Exception):
+    pass
+
+
 class ClusterCreationException(Exception):
     pass
 
@@ -227,6 +231,10 @@ class RuleDeleteException(Exception):
 
 
 class SelfIPCreationException(Exception):
+    pass
+
+
+class SelfIPAssureException(Exception):
     pass
 
 
