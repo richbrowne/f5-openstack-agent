@@ -14,10 +14,11 @@
 # limitations under the License.
 #
 
+import constants_v2 as const
 import netaddr
 from oslo_log import log as logging
 
-from f5_openstack_agent.lbaasv2.drivers.bigip.exceptions as f5_ex
+from f5_openstack_agent.lbaasv2.drivers.bigip import exceptions as f5_ex
 from f5_openstack_agent.lbaasv2.drivers.bigip.network_helper import \
     NetworkHelper
 from f5_openstack_agent.lbaasv2.drivers.bigip.resource_helper \
@@ -27,6 +28,38 @@ from f5_openstack_agent.lbaasv2.drivers.bigip.resource_helper \
 from requests import HTTPError
 
 LOG = logging.getLogger(__name__)
+
+
+class BigipSelfIpContextManager():
+
+    def __init__(self, bigip, name, partition):
+        self.selfip = bigip.net.selfips.selfip
+        self.partition = partition
+        self.name = name
+
+    def __enter__(self):
+        resource_loaded = False
+        try:
+            exists = self.selfip.exists(name=self.name,
+                                        partition=self.partition)
+            if exists:
+                self.selfip.load(name=self.name, partition=self.partition)
+                resource_loaded = True
+        except HTTPError as err:
+            LOG.error("error testing selfip existence. "
+                      "Response status code: %s. "
+                      "Response message: %s." % (
+                          err.response.status_code,
+                          err.message))
+        except Exception as e:
+            LOG.error("error testing selfip existence: %s",
+                      e.message)
+
+        return (self.selfip, resource_loaded)
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        LOG.error("error handling selfip resource: %s ",
+                  exc_value.message)
 
 
 class BigipSelfIpManager(object):
@@ -44,9 +77,11 @@ class BigipSelfIpManager(object):
             return create_succeeded
 
         LOG.debug("Getting selfip....")
-        s = bigip.net.selfips.selfip
-        if s.exists(name=model['name'], partition=model['partition']):
-            return True
+        with BigipSelfIpContextManager(
+                name=model['name'],
+                partition=model['partition']) as (s, selfip_exists):
+            if selfip_exists:
+                return True
 
         try:
             self.selfip_manager.create(bigip, model)
@@ -54,9 +89,10 @@ class BigipSelfIpManager(object):
         except HTTPError as err:
             if err.response.status_code == 409:
                 create_succeeded = True
-            elif (err.response.status_code == 400 and 
-                      if err.response.text.find("must be one of the vlans "
-                                                "in the associated route domain") > 0):
+            elif (err.response.status_code == 400 and
+                  err.response.text.find(
+                      "must be one of the vlans "
+                      "in the associated route domain") > 0):
                 self.network_helper.add_vlan_to_domain(
                     bigip,
                     name=model['vlan'],
@@ -104,16 +140,18 @@ class BigipSelfIpManager(object):
                 subnet['id'] in bigip.assured_tenant_snat_subnets[tenant_id]:
             return True
 
+        # Get the selfip address from Neutron
         selfip_address = self._get_bigip_selfip_address(bigip, subnet)
+
+        # Did the call to get a selfip succeed?
         if len(selfip_address) == 0:
-            raise f5_ex.SelfIPAssureException(
+            # No, raise an exception
+            raise f5_ex.SelfIPCreationException(
                 "cannot get big-ip selfip from neutron")
-        LOG.debug("have selfip address: %s" % selfip_address)
 
         if 'route_domain_id' not in network:
             raise f5_ex.SelfIPAssureException(
                 "network not annotated with route_domain_id")
-        LOG.debug("route domain id: %s" % network['route_domain_id'])
 
         selfip_address += '%' + str(network['route_domain_id'])
         LOG.debug("have selfip address: %s" % selfip_address)
@@ -137,9 +175,10 @@ class BigipSelfIpManager(object):
             "partition": network_folder
         }
         LOG.debug("Creating the Self-IP with model: %s" % model)
-        # This can raise a creation exception.
+
+        # This can raise SelfIPCreationException.
         self.create_bigip_selfip(bigip, model)
-        
+
         if self.l3_binding:
             self.l3_binding.bind_address(subnet_id=subnet['id'],
                                          ip_address=selfip_address)
@@ -214,13 +253,7 @@ class BigipSelfIpManager(object):
         # Setup a wild card ip forwarding virtual service for this subnet
         gw_name = "gw-" + subnet['id']
         vs = bigip.ltm.virtuals.virtual
-        try:
-            vs_exists = vs.exists(name=gw_name, partition=network_folder):
-        except:
-            raise VirtualServerQueryException(
-                "error testing existence of gateway virtual server")
-
-        if not vs_exists:
+        if not vs.exists(name=gw_name, partition=network_folder):
             try:
                 vs.create(
                     name=gw_name,
@@ -233,18 +266,10 @@ class BigipSelfIpManager(object):
                     ipForward=True
                 )
             except Exception:
-                raise VirtualServerCreationException()
-
-        with BigIPResourceContext(
-                bigip.ltm.virtuals.virtual,
-                name=gw_name,
-                partition=network_folder) as (vs, exists):
-            if not exists:
-                vs.create(
-
+                raise f5_ex.VirtualServerCreationException()
 
         virtual_address = bigip.ltm.virtual_address_s.virtual_address
-        
+
         virtual_address.load(name='0.0.0.0:0', partition=network_folder)
         virtual_address.update(trafficGroup=traffic_group)
 
@@ -274,8 +299,7 @@ class BigipSelfIpManager(object):
                 mask=None
             )
 
-        self.network_helper.delete_selfip(
-            bigip, floating_selfip_name, network_folder)
+        self.delete_selfip(bigip, floating_selfip_name, network_folder)
 
         if self.l3_binding:
             self.l3_binding.unbind_address(subnet_id=subnet['id'],
@@ -291,3 +315,60 @@ class BigipSelfIpManager(object):
         if subnet['id'] in bigip.assured_gateway_subnets:
             bigip.assured_gateway_subnets.remove(subnet['id'])
         return gw_name
+
+    def get_selfip_addr(self, bigip, name, partition=const.DEFAULT_PARTITION):
+        try:
+            s = bigip.net.selfips.selfip
+            if s.exists(name=name, partition=partition):
+                s.load(name=name, partition=partition)
+                return s.address
+        except HTTPError as err:
+            LOG.error("Error getting selfip address for %s. "
+                      "Repsponse status code: %s. Response "
+                      "message: %s." % (name,
+                                        err.response.status_code,
+                                        err.message))
+        return None
+
+    def get_selfip_cidr(self, bigip, name, partition=const.DEFAULT_PARTITION):
+        try:
+            s = bigip.net.selfips.selfip
+            if s.exists(name=name, partition=partition):
+                s.load(name=name, partition=partition)
+                return s.address
+        except HTTPError as err:
+            LOG.error("Error getting selfip address for %s. "
+                      "Repsponse status code: %s. Response "
+                      "message: %s." % (name,
+                                        err.response.status_code,
+                                        err.message))
+        return None
+
+    def get_selfips(self, bigip, partition=const.DEFAULT_PARTITION,
+                    vlan_name=None):
+        if not vlan_name.startswith('/'):
+            vlan_name = "/%s/%s" % (partition, vlan_name)
+        sc = bigip.net.selfips
+        params = {'params': {'$filter': 'partition eq %s' % partition}}
+        selfips = sc.get_collection(requests_params=params)
+        selfips_list = []
+        for selfip in selfips:
+            if vlan_name and selfip.vlan != vlan_name:
+                continue
+            selfip.name = selfip.name
+            selfips_list.append(selfip)
+        return selfips_list
+
+    def delete_selfip(self, bigip, name, partition=const.DEFAULT_PARTITION):
+        """Delete the selfip if it exists."""
+        try:
+            s = bigip.net.selfips.selfip
+            if s.exists(name=name, partition=partition):
+                s.load(name=name, partition=partition)
+                s.delete()
+        except HTTPError as err:
+            LOG.error("Error deleting selfip %s. "
+                      "Repsponse status code: %s. Response "
+                      "message: %s." % (name,
+                                        err.response.status_code,
+                                        err.message))

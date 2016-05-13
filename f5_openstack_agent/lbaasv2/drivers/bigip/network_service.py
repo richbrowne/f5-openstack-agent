@@ -95,7 +95,7 @@ class NetworkServiceBuilder(object):
                     partition='Common')
 
                 # find the IP address for the selfip for each box
-                local_ip = self.network_helper.get_selfip_addr(
+                local_ip = self.bigip_selfip_manager.get_selfip_addr(
                     bigip,
                     vtep_selfip_name,
                     partition=vtep_folder
@@ -379,7 +379,7 @@ class NetworkServiceBuilder(object):
         partition_id = self.service_adapter.get_folder_name(tenant_id)
         LOG.debug("Calling get_selfips with: partition %s and vlan_name %s",
                   partition_id, rd_vlan)
-        selfips = self.network_helper.get_selfips(
+        selfips = self.bigip_selfip_manager.get_selfips(
             bigip,
             partition=partition_id,
             vlan_name=rd_vlan
@@ -735,13 +735,13 @@ class NetworkServiceBuilder(object):
                 local_selfip_name = "local-" + bigip.device_name + \
                                     "-" + subnet['id']
 
-                selfip_address = self.network_helper.get_selfip_addr(
+                selfip_address = self.bigip_selfip_manager.get_selfip_addr(
                     bigip,
                     local_selfip_name,
                     partition=network_folder
                 )
 
-                self.network_helper.delete_selfip(
+                self.bigip_selfip_manager.delete_selfip(
                     bigip,
                     local_selfip_name,
                     partition=network_folder
