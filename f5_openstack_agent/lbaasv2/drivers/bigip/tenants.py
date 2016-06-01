@@ -94,8 +94,6 @@ class BigipTenantManager(object):
                 self.network_helper.delete_route_domain(bigip,
                                                         partition,
                                                         domain_name)
-        self.system_helper.force_root_folder(bigip)
-
         try:
             self.system_helper.delete_folder(bigip, partition)
         except f5ex.SystemDeleteException:

@@ -15,6 +15,14 @@
 
 from oslo_log import log as logging
 
+from f5_openstack_agent.lbaasv2.drivers.bigip.network_helper import \
+    NetworkHelper
+from f5_openstack_agent.lbaasv2.drivers.bigip.resource_helper \
+    import BigIPResourceHelper
+from f5_openstack_agent.lbaasv2.drivers.bigip.resource_helper \
+    import ResourceType
+from requests import HTTPError
+
 LOG = logging.getLogger(__name__)
 
 
@@ -127,12 +135,9 @@ class SystemHelper(object):
         pass
 
     def purge_folder_contents(self, bigip, folder):
-
-        params = {'params': {'filter': 'partition eq %s' % folder}}
-        
+        network_helper = NetworkHelper()
         if folder not in self.exempt_folders:
-            
-            resource_types = [
+            ltm_types = [
                 virtual,
                 pool,
                 http_monitor,
@@ -143,9 +148,27 @@ class SystemHelper(object):
                 snat,
                 snatpool,
                 snat_translation,
-                rule,
+                rule
+            ]
+            for ltm_type in ltm_types:
+                resource = BigIPResourceHelper(ltm_type)
+                [ r.delete() for r in resource.get_resources(bigip, folder) ]
+
+            net_types = [
                 arp,
                 selfip,
                 vlan,
-                route
+                route_domain
             ]
+            for net_type in net_types:
+                resource = BigIPResourceHelper(net_type)
+                [ r.delete() for r in resource.get_resources(bigip, folder) ]
+
+            resource = BigIPResourceHelper(tunnel)
+            tunnels = resource.get_resources(bigip, folder)
+
+            for tunnel in tunnels:
+                network_helper.delete_all_fdb_entries(
+                    bigip, tunnel.name, folder)
+                network_helper.delete_tunnel(
+                    bigip, tunnel.name, folder)
