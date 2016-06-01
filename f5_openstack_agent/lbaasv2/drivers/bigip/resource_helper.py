@@ -33,7 +33,11 @@ class ResourceType(Enum):
     snat = 12
     snatpool = 13
     snat_translation = 14
-    selfip = 15
+    selfip = 1b5
+    rule = 16
+    vlan = 17
+    arp = 18
+    route = 19
 
 
 class BigIPResourceHelper(object):
@@ -131,6 +135,32 @@ class BigIPResourceHelper(object):
 
         return resource
 
+    def get_resources(self, bigip, partition=None):
+        u"""Retrieve a collection BIG-IP® of resources from a BIG-IP®.
+
+        Generates a list of resources objects on a BIG-IP® system.
+
+        :param bigip: BigIP instance to use for creating resource.
+        :param name: Name of resource to load.
+        :param partition: Partition name for resource.
+        :returns: list of created or updated resource objects.
+        """
+        resources = []
+        try:
+            collection = self._collection(bigip)
+        except KeyError as err:
+            LOG.exception(err.message)
+            raise err
+
+        if collection:
+            if partition:
+                params = {'params': {'$filter': 'partition eq %s' % partition}}
+                resources = collection.get_collection(requests_params=params)
+            else:
+                resources = collection.get_collection()
+
+        return resources
+
     def _resource(self, bigip):
         return {
             ResourceType.nat: lambda bigip: bigip.tm.ltm.nats.nat,
@@ -156,3 +186,37 @@ class BigIPResourceHelper(object):
             ResourceType.selfip:
                 lambda bigip: bigip.tm.net.selfips.selfip
         }[self.resource_type](bigip)
+
+    def _collection(self, bigip):
+        collection_map = {
+            ResourceType.nat: lambda bigip: bigip.tm.ltm.nats,
+            ResourceType.pool: lambda bigip: bigip.tm.ltm.pools,
+            ResourceType.sys: lambda bigip: bigip.tm.sys,
+            ResourceType.virtual: lambda bigip: bigip.tm.ltm.virtuals,
+            ResourceType.member: lambda bigip: bigip.tm.ltm.pools.pool.member,
+            ResourceType.folder: lambda bigip: bigip.tm.sys.folders,
+            ResourceType.http_monitor:
+                lambda bigip: bigip.tm.ltm.monitor.https,
+            ResourceType.https_monitor:
+                lambda bigip: bigip.tm.ltm.monitor.https_s,
+            ResourceType.tcp_monitor:
+                lambda bigip: bigip.tm.ltm.monitor.tcps,
+            ResourceType.ping_monitor:
+                lambda bigip: bigip.tm.ltm.monitor.gateway_icmps,
+            ResourceType.node: lambda bigip: bigip.tm.ltm.nodes,
+            ResourceType.snat: lambda bigip: bigip.tm.ltm.snats,
+            ResourceType.snatpool:
+                lambda bigip: bigip.tm.ltm.snatpools,
+            ResourceType.snat_translation:
+                lambda bigip: bigip.tm.ltm.snat_translations,
+            ResourceType.selfip:
+                lambda bigip: bigip.tm.net.selfips
+        }
+
+        if self.resource_type in collection_map:
+            collection_map[self.resource_type](bigip)
+        else:
+            LOG.error("Error attempting to get collection for "
+                      "resource %s", self.resource_type)
+            raise KeyError("No collection available for %s" %
+                           (self.resource_type))

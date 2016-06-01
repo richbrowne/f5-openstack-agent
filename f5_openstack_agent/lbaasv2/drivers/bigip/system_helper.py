@@ -20,6 +20,9 @@ LOG = logging.getLogger(__name__)
 
 class SystemHelper(object):
 
+    def __init__(self):
+        self.exempt_folders = ['/', 'Common']
+
     def create_folder(self, bigip, folder):
         f = bigip.tm.sys.folders.folder
         f.create(**folder)
@@ -86,12 +89,12 @@ class SystemHelper(object):
 
     def set_tunnel_sync(self, bigip, enabled=False):
 
-        # if enabled:
-        #    val = 'enable'
-        # else:
-        #    val = 'disable'
-        # db = bigip.tm.sys.dbs.db.load(name='iptunnel.configsync')
-        # db.update(value=val)
+        if enabled:
+            val = 'enable'
+        else:
+            val = 'disable'
+        db = bigip.tm.sys.dbs.db.load(name='iptunnel.configsync')
+        db.update(value=val)
         pass
 
     def get_provision_extramb(self, bigip):
@@ -120,11 +123,29 @@ class SystemHelper(object):
     def purge_orphaned_folders(self, bigip):
         pass
 
-    def force_root_folder(self, bigip):
-        pass
-
     def purge_orphaned_folders_contents(self, bigip, folders):
         pass
 
     def purge_folder_contents(self, bigip, folder):
-        pass
+
+        params = {'params': {'filter': 'partition eq %s' % folder}}
+        
+        if folder not in self.exempt_folders:
+            
+            resource_types = [
+                virtual,
+                pool,
+                http_monitor,
+                https_monitor,
+                tcp_monitor,
+                ping_monitor,
+                node,
+                snat,
+                snatpool,
+                snat_translation,
+                rule,
+                arp,
+                selfip,
+                vlan,
+                route
+            ]
