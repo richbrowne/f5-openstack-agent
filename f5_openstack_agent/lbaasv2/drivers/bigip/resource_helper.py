@@ -33,7 +33,7 @@ class ResourceType(Enum):
     snat = 12
     snatpool = 13
     snat_translation = 14
-    selfip = 1b5
+    selfip = 15
     rule = 16
     vlan = 17
     arp = 18
