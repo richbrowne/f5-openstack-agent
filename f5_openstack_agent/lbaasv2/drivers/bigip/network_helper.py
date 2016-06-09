@@ -506,12 +506,16 @@ class NetworkHelper(object):
         fdb_entry['name'] = mac_address
         fdb_entry['endpoint'] = vtep_ip_address
 
+        LOG.debug("before adding fdb to records: %s" % records)
+
         for i in range(len(records)):
             if records[i]['name'] == mac_address:
                 records[i] = fdb_entry
                 break
         else:
             records.append(fdb_entry)
+
+        LOG.debug("after adding fdb to records: %s" % records)
 
         try:
             tunnel = bigip.tm.net.fdbs.tunnels.tunnel
@@ -522,24 +526,34 @@ class NetworkHelper(object):
                     # arp_ip_address is typcially member address.
                     if arp_ip_address:
                         try:
-                            LOG.debug("Creating ARP with IP address %s and"
+                            LOG.debug("Creating ARP with IP address %s and "
                                       "MAC addess %s" % (arp_ip_address,
                                                          mac_address))
                             arp = bigip.tm.net.arps.arp
-                            arp.create(ip_address=arp_ip_address,
-                                       mac_address=mac_address,
+                            ip_address = urllib.quote(
+                                self._remove_route_domain_zero(arp_ip_address))
+                            arp.create(name=ip_address,
+                                       ipAddress=ip_address,
+                                       macAddress=mac_address,
                                        partition=partition)
+                        except HTTPError as err:
+                            LOG.error("Error adding static arp %s. "
+                                      "Response status code: %s. Response "
+                                      "message: %s." % (ip_address,
+                                                        err.response.status_code,
+                                                        err.message))
                         except Exception as e:
-                            LOG.error('add_fdb_entry',
-                                      'could not create static arp: %s'
-                                      % e.message)
+                            LOG.error('add_fdb_entry: '
+                                      'could not create static arp: %s' %
+                                      (e.message))
                             return False
+
                 return True
             else:
-                LOG.debug("Tunnel %s does not exist." % tunnel_name)
+                LOG.error("Tunnel %s does not exist." % tunnel_name)
         except HTTPError as err:
             LOG.error("Error checking tunnel %s. "
-                      "Repsponse status code: %s. Response "
+                      "Response status code: %s. Response "
                       "message: %s." % (tunnel_name,
                                         err.response.status_code,
                                         err.message))
