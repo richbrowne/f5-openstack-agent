@@ -117,6 +117,7 @@ class NetworkServiceBuilder(object):
         if self.conf.f5_global_routed_mode or not service['loadbalancer']:
             return
 
+        # Allocate a route domain to support namespaces and add to service
         if self.conf.use_namespaces:
             self._annotate_service_route_domains(service)
 
@@ -124,17 +125,15 @@ class NetworkServiceBuilder(object):
         subnetsinfo = self._get_subnets_to_assure(service)
         for (assure_bigip, subnetinfo) in (
                 itertools.product(self.driver.get_all_bigips(), subnetsinfo)):
+
             self.l2_service.assure_bigip_network(
                 assure_bigip, subnetinfo['network'])
-            LOG.debug("L2 Networking Assured")
+
             self.bigip_selfip_manager.assure_bigip_selfip(
                 assure_bigip, service, subnetinfo)
-            LOG.debug("XXXXXXXXXXXXXXX SelfIP assured")
 
         # L3 Shared Config
         assure_bigips = self.driver.get_config_bigips()
-        LOG.debug("get subnetinfo for ...")
-        LOG.debug(assure_bigips)
         for subnetinfo in subnetsinfo:
             if self.conf.f5_snat_addresses_per_subnet > 0:
                 self._assure_subnet_snats(assure_bigips, service, subnetinfo)
@@ -606,8 +605,8 @@ class NetworkServiceBuilder(object):
             if lb_status == plugin_const.PENDING_DELETE:
                 self.delete_bigip_vip_l2(bigip, loadbalancer)
             else:
-                LOG.debug("update_bigip_l2 calling update_bigip_vip_l2")
                 self.update_bigip_vip_l2(bigip, loadbalancer)
+
             LOG.debug("update_bigip_l2 complete")
 
     def update_bigip_member_l2(self, bigip, loadbalancer, member):
