@@ -170,6 +170,8 @@ class L2ServiceBuilder(object):
             return
 
         if network['id'] in bigip.assured_networks:
+            LOG.debug('    assure_bigip_network: '
+                      'Network is already assured... skipping.')
             return
 
         if network['id'] in self.conf.common_network_ids:
@@ -177,7 +179,7 @@ class L2ServiceBuilder(object):
                       'Network is a common global network... skipping.')
             return
 
-        LOG.debug("        assure_bigip_network network: %s" % str(network))
+        LOG.debug("Assure_bigip_network network: %s" % str(network))
         start_time = time()
         if self.is_common_network(network):
             network_folder = 'Common'
@@ -201,6 +203,8 @@ class L2ServiceBuilder(object):
                             ' Cannot setup network.'
             LOG.error(error_message)
             raise f5ex.InvalidNetworkType(error_message)
+
+        # Add network to list of assured networks.
         bigip.assured_networks.append(network['id'])
         if time() - start_time > .001:
             LOG.debug("        assure bigip network took %.5f secs" %
@@ -314,9 +318,9 @@ class L2ServiceBuilder(object):
                    'description': network['id'],
                    'route_domain_id': network['route_domain_id']}
         LOG.debug("---Creating VXLAN network---")
-        LOG.debug(payload)
         self.network_helper.create_multipoint_tunnel(bigip, payload)
         LOG.debug("---VXLAN network Created---")
+
         if self.fdb_connector:
             self.fdb_connector.notify_vtep_added(network, bigip.local_ip)
 
@@ -632,7 +636,7 @@ class L2ServiceBuilder(object):
                 mac_addr = mac_address
             else:
                 mac_addr = _get_tunnel_fake_mac(network, vtep)
-            # REVISIT(Rich Browne) caller must provide folder and not tenant_id
+
             self.network_helper.add_fdb_entry(
                 bigip,
                 tunnel_name=tunnel_name,
@@ -652,14 +656,15 @@ class L2ServiceBuilder(object):
                 mac_addr = mac_address
             else:
                 mac_addr = _get_tunnel_fake_mac(network, vtep)
-            # REVISIT caller must provide folder and not tenant_id
-            self.network_helper.add_fdb_entry(
-                bigip,
-                tunnel_name=tunnel_name,
-                partition=net_folder,
-                mac_address=mac_addr,
-                vtep_ip_address=vtep,
-                arp_ip_address=ip_address)
+
+            if not self.network_helper.add_fdb_entry(
+                    bigip,
+                    tunnel_name=tunnel_name,
+                    partition=net_folder,
+                    mac_address=mac_addr,
+                    vtep_ip_address=vtep,
+                    arp_ip_address=ip_address):
+                LOG.error("Failed to add fdb")
 
     def delete_bigip_fdbs(self, bigip, net_folder, fdb_info, vteps_by_type):
         # Delete fdb records for a mac/ip with specified vteps
