@@ -65,8 +65,12 @@ class ServiceModelAdapter(object):
 
     def get_virtual(self, service):
         listener = service["listener"]
-        listener["use_snat"] = self.snat_mode()
         loadbalancer = service["loadbalancer"]
+
+        listener["use_snat"] = self.snat_mode()
+        if listener["use_snat"]:
+            log.debug("Need to add snat pool name to listener")
+            log.debug("%s" % listener)
 
         # transfer session_persistence from pool to listener
         if "pool" in service and "session_persistence" in service["pool"]:
