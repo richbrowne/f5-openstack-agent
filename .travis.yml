@@ -3,9 +3,12 @@ language: python
 python:
     - '2.7'
 before_install:
-    - git config --global user.email "OpenStack_TravisCI@f5.com"
-    - git config --global user.name "Travis F5 Openstack"
+    - git config --global user.email "r.browne@f5.com"
+    - git config --global user.name "richbrowne"
 install:
     - pip install hacking
+    - sudo apt-get update
+    - sudo apt-get install git -y
 script:
     - flake8 f5_openstack_agent
+    - git clone https://github.com/richbrowne/f5-openstack-agent-rpmdist.git rpmdist
