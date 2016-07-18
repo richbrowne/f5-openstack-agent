@@ -1,21 +1,26 @@
-sudo: true 
-
+sudo: true
 services:
-  - docker
-
+- docker
 language: python
-
 python:
-    - '2.7'
+- '2.7'
 before_install:
-    - git config --global user.email "r.browne@f5.com"
-    - git config --global user.name "richbrowne"
+- git config --global user.email "r.browne@f5.com"
+- git config --global user.name "richbrowne"
 install:
-    - pip install hacking
-    - sudo apt-get update
-    - sudo apt-get install git -y
+- pip install hacking
+- sudo apt-get update
+- sudo apt-get install git -y
 script:
-    - flake8 f5_openstack_agent
-    - git clone https://github.com/richbrowne/f5-openstack-agent-rpmdist.git rpmdist
-    - docker build -t centos7-pkg-builder ./rpmdist/Docker/redhat/7
-    - docker run --privileged -v $PWD:/var/bdir:rw centos7-pkg-builder /bin/bash /build-rpms.sh
+- flake8 f5_openstack_agent
+- git clone https://github.com/richbrowne/f5-openstack-agent-rpmdist.git rpmdist
+- docker build -t centos7-pkg-builder ./rpmdist/Docker/redhat/7
+- docker run --privileged -v $PWD:/var/bdir:rw centos7-pkg-builder /bin/bash /build-rpms.sh
+deploy:
+  provider: releases
+  api_key:
+    secure: 1XzOE2sfZVaHBJAchyZ87pAT7HKZiSrvSSfmhsM2mb8pQ+7AhJ9b2dj9TxYQE8uuUC+pDLEXJJCrGH4nEeRlvmFh/ETpP3ZWN0TShqJzCSKs0YPLpqUqdWBLZRTCUxkmyuEfA5LpNqPTEU3MW40MUAo+eDDkYrVHVumU7lmzuvMnrsf0U9G0H86wzQrDPfLByCKrZmjm1nOev6dLVrw+8nzwbaARKUUw8UQak4P8vmoyB8oVzApgpvpvua8mpoSZ++q9gdOsZKEXKzLVrCnqOObjIAiWGGO4W5U2wZ4AyPKPmzopGoTK0cac/nUn/gmpjU71nyv494WJWFeDg3zn0jVbf+syzMOgpby8BUGKAqyGmdIklpIaXB4Iz2nJEIvuW3ir1LU/lh+ZvOLzq6Y4G06P5Ytfpvg83/Hq4AacNoy6+PcVy7988MGEffw7Sgq3djpUz4l/PsL8EVM2CpA0uRXiifIdJ6D7upvVJRR1kRxiProgSvqgR/Xx/t4IbJdhQPPoVlgyJrn8xbaNYE0K0lRG6nwfAQ4cxn7JgfPTR1eSA1k/1UVCFBzfXELcpd6EVcq99K5U2qudmv0fKN1sSHepuANGrd/EkNPC4ZfBXwZHWC5r+qNHcbvKSbrzb/9RgmMoyayZEbPygkCa+JotUZvKbGvLRdZ0/DCJroWaFAg=
+  file: dist/f5-openstack-agent-9.0.1-1.noarch.rpm
+  on:
+    repo: richbrowne/f5-openstack-agent
+    branch: feature.rpmbuild
