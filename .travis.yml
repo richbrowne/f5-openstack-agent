@@ -16,7 +16,12 @@ script:
 - git clone https://github.com/richbrowne/f5-openstack-agent-rpmdist.git rpmdist
 - docker build -t centos7-pkg-builder ./rpmdist/Docker/redhat/7
 - docker run --privileged -v $PWD:/var/bdir:rw centos7-pkg-builder /bin/bash /build-rpms.sh
-before_deploy: "ls -al rpmdist"
+- sudo chown -R travis:travis ./rpmdist
+
+before_deploy:
+- sudo chown -R travis:travis ./rpmdist
+- ls -al rpmdist
+- ls -al rpmdist/dist
 deploy:
   provider: releases
   api_key:
