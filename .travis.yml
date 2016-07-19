@@ -13,7 +13,7 @@ install:
 - sudo apt-get install git -y
 script:
 - flake8 f5_openstack_agent
-- scripts/package_script.sh
+- scripts/package_agent.sh
 - git clone https://github.com/richbrowne/f5-openstack-agent-rpmdist.git rpmdist
 - docker build -t centos7-pkg-builder ./rpmdist/Docker/redhat/7
 - docker run --privileged -v $PWD:/var/bdir:rw centos7-pkg-builder /bin/bash /build-rpms.sh
