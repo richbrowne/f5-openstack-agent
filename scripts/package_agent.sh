@@ -2,14 +2,13 @@
 
 OS_TYPE=$1
 OS_VERSION=$2
-PKG_ROOT=$(pwd)
-DIST_DIR="dist/${OS_TYPE}/${OS_VERSION}"
-DEST_DIR=${PKG_ROOT}/dist/${OS_TYPE}/${OS_VERSION}
 
+PKG_DIST="pkg_dist/${OS_TYPE}/${OS_VERSION}"
+
+rm -rf ${PKG_DIST}
 if [ $OS_TYPE == "redhat" ]; then
-	git clone https://github.com/richbrowne/f5-openstack-agent-rpmdist.git ${DEST_DIR}
+	git clone https://github.com/richbrowne/f5-openstack-agent-rpmdist.git ${PKG_DIST}
 elif [ $OS_TYPE == "ubuntu" ]; then
-	echo "DEBIAN PACKAGING NOT IMPLEMENTED"
 	exit 0
 else
 	echo "Unknown os type: ${OS_TYPE}"
@@ -17,7 +16,10 @@ else
 fi
 
 BUILD_CONTAINER=${OS_TYPE}${OS_VERSION}-pkg-builder
-BUILD_DIR="/var/bdir"
-docker build -t ${BUILD_CONTAINER} ${DEST_DIR}/Docker/${OS_TYPE}/${OS_VERSION}
-docker run --privileged -v ${PKG_ROOT}:${BUILD_DIR} ${BUILD_CONTAINER} /bin/bash /build-rpms.sh "${DIST_DIR}"
-sudo chown -R travis:travis ${DEST_DIR}
+WORKING_DIR="/var/wdir"
+
+docker build -t ${BUILD_CONTAINER} ${PKG_DIST}/Docker/${OS_TYPE}/${OS_VERSION}
+docker run --privileged -v $(pwd):${WORKING_DIR} ${BUILD_CONTAINER} /bin/bash /build-rpms.sh "${WORKING_DIR}" "${PKG_DIST}"
+sudo chown -R travis:travis ${PKG_DIST}
+
+exit 0
