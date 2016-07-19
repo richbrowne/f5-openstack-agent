@@ -3,6 +3,7 @@
 OS_TYPE=$1
 OS_VERSION=$2
 PKG_ROOT=$(pwd)
+DIST_DIR="dist/${OS_TYPE}/${OS_VERSION}"
 DEST_DIR=${PKG_ROOT}/dist/${OS_TYPE}/${OS_VERSION}
 
 if [ $OS_TYPE == "redhat" ]; then
@@ -18,5 +19,5 @@ fi
 BUILD_CONTAINER=${OS_TYPE}${OS_VERSION}-pkg-builder
 BUILD_DIR="/var/bdir"
 docker build -t ${BUILD_CONTAINER} ${DEST_DIR}/Docker/${OS_TYPE}/${OS_VERSION}
-docker run --privileged -v ${PKG_ROOT}:${BUILD_DIR} ${BUILD_CONTAINER} /bin/bash /build-rpms.sh
+docker run --privileged -v ${PKG_ROOT}:${BUILD_DIR} ${BUILD_CONTAINER} /bin/bash /build-rpms.sh "${DIST_DIR}"
 sudo chown -R travis:travis ${DEST_DIR}
