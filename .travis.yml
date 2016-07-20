@@ -20,7 +20,7 @@ install:
 script:
 - flake8 f5_openstack_agent
 - git clone https://github.com/F5Networks/${DIST_REPO}.git
-- ${DIST_REPO}/scripts/package_agent.sh "redhat" "7" ${DIST_REPO}
+- ${DIST_REPO}/scripts/package_agent.sh ${OS_TYPE} ${OS_VERSION} ${DIST_REPO}
 
 before_deploy:
 - sudo chown -R travis:travis ${DIST_REPO}
