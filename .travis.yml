@@ -13,7 +13,8 @@ install:
 - sudo apt-get install git -y
 script:
 - flake8 f5_openstack_agent
-- scripts/package_agent.sh "redhat" "7"
+- git clone https://github.com/F5Networks/f5-openstack-agent-dist.git ./build
+- build/scripts/package_agent.sh "redhat" "7"
 
 before_deploy:
 - sudo chown -R travis:travis ./pkg_dist
