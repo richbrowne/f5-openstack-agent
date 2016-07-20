@@ -13,17 +13,17 @@ install:
 - sudo apt-get install git -y
 script:
 - flake8 f5_openstack_agent
-- git clone https://github.com/F5Networks/f5-openstack-agent-dist.git ./build
-- build/scripts/package_agent.sh "redhat" "7"
+- git clone https://github.com/F5Networks/f5-openstack-agent-dist.git ./dist
+- build/scripts/package_agent.sh "redhat" "7" "dist"
 
 before_deploy:
-- sudo chown -R travis:travis ./pkg_dist
+- sudo chown -R travis:travis ./dist
 
 deploy:
   provider: releases
   api_key:
     secure: 1XzOE2sfZVaHBJAchyZ87pAT7HKZiSrvSSfmhsM2mb8pQ+7AhJ9b2dj9TxYQE8uuUC+pDLEXJJCrGH4nEeRlvmFh/ETpP3ZWN0TShqJzCSKs0YPLpqUqdWBLZRTCUxkmyuEfA5LpNqPTEU3MW40MUAo+eDDkYrVHVumU7lmzuvMnrsf0U9G0H86wzQrDPfLByCKrZmjm1nOev6dLVrw+8nzwbaARKUUw8UQak4P8vmoyB8oVzApgpvpvua8mpoSZ++q9gdOsZKEXKzLVrCnqOObjIAiWGGO4W5U2wZ4AyPKPmzopGoTK0cac/nUn/gmpjU71nyv494WJWFeDg3zn0jVbf+syzMOgpby8BUGKAqyGmdIklpIaXB4Iz2nJEIvuW3ir1LU/lh+ZvOLzq6Y4G06P5Ytfpvg83/Hq4AacNoy6+PcVy7988MGEffw7Sgq3djpUz4l/PsL8EVM2CpA0uRXiifIdJ6D7upvVJRR1kRxiProgSvqgR/Xx/t4IbJdhQPPoVlgyJrn8xbaNYE0K0lRG6nwfAQ4cxn7JgfPTR1eSA1k/1UVCFBzfXELcpd6EVcq99K5U2qudmv0fKN1sSHepuANGrd/EkNPC4ZfBXwZHWC5r+qNHcbvKSbrzb/9RgmMoyayZEbPygkCa+JotUZvKbGvLRdZ0/DCJroWaFAg=
-  file: pkg_dist/redhat/7/rpms/f5-openstack-agent-$TRAVIS_TAG-1.el7.noarch.rpm
+  file: dist/redhat/7/rpms/f5-openstack-agent-$TRAVIS_TAG-1.el7.noarch.rpm
   skip_cleanup: true
   overwrite: true
   on:
