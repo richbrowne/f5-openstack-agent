@@ -436,9 +436,11 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):  # b --> B
             return
         resync = False
         known_services = set()
+        owned_services = set()
         for lb_id, service in self.cache.services.iteritems():
+            known_services.add(lb_id)
             if self.agent_host == service.agent_host:
-                known_services.add(lb_id)
+                owned_services.add(lb_id)
 
         try:
             active_loadbalancers = (
@@ -446,20 +448,18 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):  # b --> B
             )
             active_loadbalancer_ids = set()
             for loadbalancer in active_loadbalancers:
-                if self.agent_host == loadbalancer['agent_host']:
+                if self.agent_host == loadbalancer['agent_host']['hostname']:
                     active_loadbalancer_ids.add(loadbalancer['lb_id'])
 
             LOG.debug("plugin produced the list of active loadbalancer ids: %s"
                       % list(active_loadbalancer_ids))
             LOG.debug("currently known loadbalancer ids before sync are: %s"
-                      % list(known_services))
+                      % list(owned_services))
 
             # Remove services that are in Neutron, but no longer managed
             # by this agent.
-            # TODO(RJB): IMPLEMENT DESTROY when we have a fully testable HA
-            # solution.
-            # for deleted_lb in known_services - active_loadbalancer_ids:
-            #    self.destroy_service(deleted_lb)
+            for deleted_lb in owned_services - active_loadbalancer_ids:
+                self.destroy_service(deleted_lb)
 
             # Validate each service we are supposed to know about.
             for lb_id in active_loadbalancer_ids:
@@ -473,7 +473,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):  # b --> B
             )
             pending_lb_ids = set()
             for loadbalancer in pending_loadbalancers:
-                if self.agent_host == loadbalancer['agent_host']:
+                if self.agent_host == loadbalancer['agent_host']['hostname']:
                     pending_lb_ids.add(loadbalancer['lb_id'])
             LOG.debug(
                 "plugin produced the list of pending loadbalancer ids: %s"
@@ -483,12 +483,12 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):  # b --> B
 
             # Get a list of any cached service we now know after
             # refreshing services
-            known_services = set()
+            owned_services = set()
             for (lb_id, service) in self.cache.services.iteritems():
                 if self.agent_host == service.agent_host:
-                    known_services.add(lb_id)
+                    owned_services.add(lb_id)
             LOG.debug("currently known loadbalancer ids after sync: %s"
-                      % list(known_services))
+                      % list(owned_services))
 
             # TODO(RJB): IMPLEMENT PURGE when we have a fully testable HA
             # solution.
