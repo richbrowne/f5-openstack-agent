@@ -392,16 +392,16 @@ class LBaaSv2PluginRPC(object):
         return loadbalancers
 
     @log_helpers.log_method_call
-    def get_active_loadbalancers(self):
+    def get_active_loadbalancers(self, env=self.env, group=self.group, host=self.host):
         """Retrieve a list of active loadbalancers for this agent."""
         loadbalancers = []
         try:
             loadbalancers = self._call(
                 self.context,
                 self._make_msg('get_active_loadbalancers',
-                               env=self.env,
-                               group=self.group,
-                               host=self.host),
+                               env,
+                               group,
+                               host),
                 topic=self.topic
             )
         except messaging.MessageDeliveryFailure:
@@ -411,16 +411,16 @@ class LBaaSv2PluginRPC(object):
         return loadbalancers
 
     @log_helpers.log_method_call
-    def get_pending_loadbalancers(self):
+    def get_pending_loadbalancers(self, env=self.env, group=self.group, host=self.host):
         """Retrieve a list of pending loadbalancers for this agent."""
         loadbalancers = []
         try:
             loadbalancers = self._call(
                 self.context,
                 self._make_msg('get_pending_loadbalancers',
-                               env=self.env,
-                               group=self.group,
-                               host=self.host),
+                               env,
+                               group,
+                               host),
                 topic=self.topic
             )
         except messaging.MessageDeliveryFailure:
