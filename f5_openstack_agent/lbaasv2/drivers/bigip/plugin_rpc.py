@@ -378,7 +378,7 @@ class LBaaSv2PluginRPC(object):
         loadbalancers = []
 
         if not env:
-            env  = self.env
+            env = self.env
         if not group:
             group = self.group
         if not host:
@@ -400,12 +400,12 @@ class LBaaSv2PluginRPC(object):
         return loadbalancers
 
     @log_helpers.log_method_call
-    def get_active_loadbalancers(self, host=None):
+    def get_active_loadbalancers(self, env=None, group=None, host=None):
         """Retrieve a list of active loadbalancers for this agent."""
         loadbalancers = []
 
         if not env:
-            env  = self.env
+            env = self.env
         if not group:
             group = self.group
         if not host:
@@ -427,12 +427,12 @@ class LBaaSv2PluginRPC(object):
         return loadbalancers
 
     @log_helpers.log_method_call
-    def get_pending_loadbalancers(self, host=None):
+    def get_pending_loadbalancers(self, env=None, group=None, host=None):
         """Retrieve a list of pending loadbalancers for this agent."""
         loadbalancers = []
 
         if not env:
-            env  = self.env
+            env = self.env
         if not group:
             group = self.group
         if not host:
