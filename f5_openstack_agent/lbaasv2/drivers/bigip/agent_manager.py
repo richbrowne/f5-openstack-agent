@@ -490,12 +490,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):  # b --> B
             LOG.debug("currently known loadbalancer ids after sync: %s"
                       % list(owned_services))
 
-            # TODO(RJB): IMPLEMENT PURGE when we have a fully testable HA
-            # solution.
-            # all_loadbalancers = self.plugin_rpc.get_all_loadbalancers()
-            # LOG.debug("loadbalancer ids after calling into plugin: %s"
-            #          % all_loadbalancers)
-            # self.remove_orphans(all_loadbalancers)
+            self.remove_orphans(all_loadbalancers)
 
         except Exception as e:
             LOG.error("Unable to retrieve ready service: %s" % e.message)

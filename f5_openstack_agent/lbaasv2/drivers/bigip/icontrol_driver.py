@@ -956,10 +956,11 @@ class iControlDriver(LBaaSBaseDriver):
         existing_lbs = []
         for loadbalancer in all_loadbalancers:
             existing_tenants.append(loadbalancer['tenant_id'])
-            existing_lbs.append(loadbalancer['lb_id'])
+            existing_lbs.append(loadbalancer)
 
         for bigip in self.get_all_bigips():
             bigip.pool.purge_orphaned_pools(existing_lbs)
+
         for bigip in self.get_all_bigips():
             bigip.system.purge_orphaned_folders_contents(existing_tenants)
 

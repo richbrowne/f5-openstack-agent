@@ -188,11 +188,17 @@ class LBaaSBuilder(object):
         loadbalancer = service["loadbalancer"]
         bigips = self.driver.get_config_bigips()
 
+        delete_monitors = (
+            loadbalancer['provisioning_status'] == plugin_const.PENDING_DELETE
+        )
+
         for monitor in monitors:
             svc = {"loadbalancer": loadbalancer,
                    "healthmonitor": monitor,
                    "pool": self.get_pool_by_id(service, monitor["pool_id"])}
-            if monitor['provisioning_status'] == plugin_const.PENDING_DELETE:
+            if ((monitor['provisioning_status'] ==
+                 plugin_const.PENDING_DELETE) or delete_monitors is True):
+
                 try:
                     self.pool_builder.delete_healthmonitor(svc, bigips)
                 except Exception as err:
@@ -213,11 +219,16 @@ class LBaaSBuilder(object):
         loadbalancer = service["loadbalancer"]
         bigips = self.driver.get_config_bigips()
 
+        delete_members = (
+            loadbalancer['provisioning_status'] == plugin_const.PENDING_DELETE
+        )
+
         for member in members:
             svc = {"loadbalancer": loadbalancer,
                    "member": member,
                    "pool": self.get_pool_by_id(service, member["pool_id"])}
-            if member['provisioning_status'] == plugin_const.PENDING_DELETE:
+            if ((member['provisioning_status'] ==
+                 plugin_const.PENDING_DELETE) or delete_members is True):
                 try:
                     self.pool_builder.delete_member(svc, bigips)
                 except Exception as err:
@@ -255,9 +266,14 @@ class LBaaSBuilder(object):
         loadbalancer = service["loadbalancer"]
         bigips = self.driver.get_config_bigips()
 
+        delete_pools = (
+            loadbalancer['provisioning_status'] == plugin_const.PENDING_DELETE
+        )
+
         for pool in pools:
             # Is the pool being deleted?
-            if pool['provisioning_status'] == plugin_const.PENDING_DELETE:
+            if ((pool['provisioning_status'] ==
+                 plugin_const.PENDING_DELETE) or delete_pools is True):
                 svc = {"loadbalancer": loadbalancer,
                        "pool": pool}
 
@@ -287,8 +303,13 @@ class LBaaSBuilder(object):
         loadbalancer = service["loadbalancer"]
         bigips = self.driver.get_config_bigips()
 
+        delete_listeners = (
+            loadbalancer['provisioning_status'] == plugin_const.PENDING_DELETE
+        )
+
         for listener in listeners:
-            if listener['provisioning_status'] == plugin_const.PENDING_DELETE:
+            if ((listener['provisioning_status'] ==
+                 plugin_const.PENDING_DELETE) or delete_listeners == True):
                 svc = {"loadbalancer": loadbalancer,
                        "listener": listener}
                 try:
@@ -307,6 +328,9 @@ class LBaaSBuilder(object):
                 member['status'] = plugin_const.PENDING_DELETE
             for monitor in service['pool']['health_monitors_status']:
                 monitor['status'] = plugin_const.PENDING_DELETE
+
+    def purge_orphaned_services(self, known_services):
+        pass
 
     @staticmethod
     def get_pool_by_id(service, pool_id):
