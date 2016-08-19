@@ -47,8 +47,6 @@ from f5_openstack_agent.lbaasv2.drivers.bigip.lbaas_builder import \
     LBaaSBuilder
 from f5_openstack_agent.lbaasv2.drivers.bigip.lbaas_driver import \
     LBaaSBaseDriver
-from f5_openstack_agent.lbaasv2.drivers.bigip.listener_service import \
-    ListenerServiceBuilder
 from f5_openstack_agent.lbaasv2.drivers.bigip import network_helper
 from f5_openstack_agent.lbaasv2.drivers.bigip.network_service import \
     NetworkServiceBuilder
@@ -731,8 +729,12 @@ class iControlDriver(LBaaSBaseDriver):
             self.network_builder.set_l2pop_rpc(l2pop_rpc)
 
     def exists(self, service):
-        # Check that service exists"""
-        return True
+        # Check that service exists
+        try:
+            return self._service_exists(service)
+        except Exception as e:
+            LOG.execption(e)
+            return False
 
     def flush_cache(self):
         # Remove cached objects so they can be created if necessary
@@ -972,11 +974,20 @@ class iControlDriver(LBaaSBaseDriver):
         if not service['loadbalancer']:
             return False
 
-        # bigip = self.get_bigip()
-        # return bigip.pool.exists(
-        #        name=service['pool']['id'],
-        #        folder=service['pool']['tenant_id'],
-        #        config_mode=self.conf.icontrol_config_mode)
+        loadbalancer = service['loadbalancer']
+        bigip = self.get_bigip()
+        folder_name = self.service_adapter.get_folder_name(
+            loadbalancer['tenant_id'])
+
+        if not self.system_helper.folder_exists(bigip, folder_name):
+            return False
+
+        for listener in service['listeners']:
+            svc = {"loadbalancer": loadbalancer,
+                   "listener": listener}
+            if not self.lbaas_builder.listener_exists(svc, bigip):
+                return False
+
         return True
 
     def _common_service_handler(self, service, delete_partition=False):

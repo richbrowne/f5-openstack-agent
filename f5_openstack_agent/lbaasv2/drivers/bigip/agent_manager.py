@@ -432,7 +432,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):  # b --> B
 
         active_loadbalancers = (self.plugin_rpc.get_active_loadbalancers())
         for loadbalancer in active_loadbalancers:
-            if self.agent_host == loadbalancer['agent_host']:
+            if self.agent_host == loadbalancer['agent_host']['hostname']:
                 try:
                     lb_id = loadbalancer['lb_id']
                     LOG.debug("collecting stats for loadbalancer %s" % lb_id)
@@ -509,7 +509,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):  # b --> B
             LOG.debug("currently known loadbalancer ids after sync: %s"
                       % list(owned_services))
 
-            self.remove_orphans(all_loadbalancers)
+            #self.remove_orphans(all_loadbalancers)
 
         except Exception as e:
             LOG.error("Unable to retrieve ready service: %s" % e.message)

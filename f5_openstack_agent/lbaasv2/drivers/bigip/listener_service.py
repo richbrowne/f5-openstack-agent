@@ -413,9 +413,49 @@ class ListenerServiceBuilder(object):
             obj.delete()
             LOG.debug("Deleted rule %s" % rule_name)
 
-    def get_listener_status(self, service, bigip):
-        """Gets the state of a listener object."""
-        listener_stats = {}
+    def get_stats(self, service, bigips, stats):
+
+        collected_stats = {}
+        for stat in stats:
+            collected_stats[stat] = 0
+
+        virtual_server = self.service_adapter.get_virtual(service)
+        part = virtual_server["partition"]
+        for bigip in bigips:
+            try:
+                vs_stats = self.vs_helper.get_stats(
+                    bigip,
+                    name=virtual_server["name"],
+                    partition=part,
+                    stats=stats)
+                for stat in stats:
+                    if stat in vs_stats:
+                        collected_stats[stat] += vs_stats[stat]
+
+            except Exception as e:
+                # log error but continue on
+                LOG.error("Error getting vitual server stats: %s", e.message)
+
+        return collected_stats
+
+    def get_status(self, service, bigip):
+
+        vs_status = {}
         stats = ['status.availabilityState',
                  'status.enabledState',
                  'status.statusReason']
+
+        virtual_server = self.service_adapter.get_virtual(service)
+        part = virtual_server["partition"]
+        try:
+            vs_status = self.vs_helper.get_stats(
+                bigip,
+                name=virtual_server["name"],
+                partition=part,
+                stats=stats)
+
+        except Exception as e:
+            # log error but continue on
+            LOG.error("Error getting vitual server stats: %s", e.message)
+
+        return vs_status

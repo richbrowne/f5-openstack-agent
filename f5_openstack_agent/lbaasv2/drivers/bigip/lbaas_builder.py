@@ -309,7 +309,7 @@ class LBaaSBuilder(object):
 
         for listener in listeners:
             if ((listener['provisioning_status'] ==
-                 plugin_const.PENDING_DELETE) or delete_listeners == True):
+                 plugin_const.PENDING_DELETE) or delete_listeners is True):
                 svc = {"loadbalancer": loadbalancer,
                        "listener": listener}
                 try:
@@ -421,3 +421,32 @@ class LBaaSBuilder(object):
                 collected_stats[stat] += pool_stats[stat]
 
         return collected_stats
+
+    def get_listener_stats(self, service, stats):
+
+        listeners = service["listeners"]
+        loadbalancer = service["loadbalancer"]
+        bigips = self.driver.get_config_bigips()
+
+        collected_stats = {}
+        for stat in stats:
+            collected_stats[stat] = 0
+
+        for listener in listeners:
+            svc = {"loadbalancer": loadbalancer, "listener": listener}
+            listener_stats = self.listener_builder.get_stats(
+                svc,
+                bigips,
+                stats)
+
+            for stat in stats:
+                collected_stats[stat] += listener_stats[stat]
+
+    def listener_exists(self, service, bigip):
+        vip = self.service_adapter.get_virtual_name(service)
+        return self.vs_helper.exists(bigip=bigip,
+                                     name=vip["name"],
+                                     partition=vip["partition"])
+
+    def get_service_status(self, service, bigip):
+        pass
