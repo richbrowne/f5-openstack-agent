@@ -509,7 +509,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):  # b --> B
             LOG.debug("currently known loadbalancer ids after sync: %s"
                       % list(owned_services))
 
-            #self.remove_orphans(all_loadbalancers)
+            # self.remove_orphans(all_loadbalancers)
 
         except Exception as e:
             LOG.error("Unable to retrieve ready service: %s" % e.message)
