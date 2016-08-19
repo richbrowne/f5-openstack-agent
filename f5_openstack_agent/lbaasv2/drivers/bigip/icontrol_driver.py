@@ -47,6 +47,8 @@ from f5_openstack_agent.lbaasv2.drivers.bigip.lbaas_builder import \
     LBaaSBuilder
 from f5_openstack_agent.lbaasv2.drivers.bigip.lbaas_driver import \
     LBaaSBaseDriver
+from f5_openstack_agent.lbaasv2.drivers.bigip.listener_service import \
+    ListenerServiceBuilder
 from f5_openstack_agent.lbaasv2.drivers.bigip import network_helper
 from f5_openstack_agent.lbaasv2.drivers.bigip.network_service import \
     NetworkServiceBuilder

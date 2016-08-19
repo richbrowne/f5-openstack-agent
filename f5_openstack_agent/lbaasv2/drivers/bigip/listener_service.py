@@ -412,3 +412,10 @@ class ListenerServiceBuilder(object):
             obj = r.load(name=rule_name, partition=vip["partition"])
             obj.delete()
             LOG.debug("Deleted rule %s" % rule_name)
+
+    def get_listener_status(self, service, bigip):
+        """Gets the state of a listener object."""
+        listener_stats = {}
+        stats = ['status.availabilityState',
+                 'status.enabledState',
+                 'status.statusReason']
