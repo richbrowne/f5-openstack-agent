@@ -22,7 +22,7 @@ from neutron.common import rpc
 from neutron.plugins.common import constants as plugin_const
 from neutron_lbaas.services.loadbalancer import constants as lb_const
 
-from f5_openstack_agent.lbaasv2.drivers.bigip import constants_v2 as constants
+from f5_openstack_agent.agent import constants_v2 as f5_const
 
 LOG = logging.getLogger
 
@@ -39,10 +39,10 @@ class LBaaSv2PluginRPC(object):
         if topic:
             self.topic = topic
         else:
-            self.topic = constants.TOPIC_PROCESS_ON_HOST_V2
+            self.topic = f5_const.TOPIC_PROCESS_ON_HOST_V2
 
         self.target = messaging.Target(topic=self.topic,
-                                       version=constants.RPC_API_VERSION)
+                                       version=f5_const.RPC_API_VERSION)
         self._client = rpc.get_client(self.target, version_cap=None)
 
         self.context = context

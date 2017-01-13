@@ -39,7 +39,7 @@ setuptools.setup(
     ],
     entry_points={
         'console_scripts': [
-            'f5-oslbaasv2-agent = f5_openstack_agent.lbaasv2.drivers.bigip.agent:main'
+            'f5-oslbaasv2-agent = f5_openstack_agent.agent.agent:main'
         ]
     },
     install_requires=['f5-sdk==2.1.0']

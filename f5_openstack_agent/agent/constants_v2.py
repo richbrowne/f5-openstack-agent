@@ -17,29 +17,14 @@
 # Service resync interval
 RESYNC_INTERVAL = 300
 
-# Values for network_type
-TYPE_FLAT = 'flat'
-TYPE_VLAN = 'vlan'
-TYPE_GRE = 'gre'
-TYPE_LOCAL = 'local'
-TYPE_VXLAN = 'vxlan'
-VXLAN_UDP_PORT = 4789
-VTEP_SELFIP_NAME = 'vtep'
+# Topic for tunnel notifications between the plugin and agent
+TUNNEL = 'tunnel'
 
-DEFAULT_PARTITION = 'Common'
-DEFAULT_ROUTE_DOMAIN_ID = 0
+AGENT_BINARY_NAME = 'f5-oslbaasv2-agent'
 
-FDB_POPULATE_STATIC_ARP = True
-# for test only
-MIN_EXTRA_MB = 0
-# MIN_EXTRA_MB = 500
+# RPC channel names
+TOPIC_PROCESS_ON_HOST_V2 = 'f5-lbaasv2-process-on-controller'
+TOPIC_LOADBALANCER_AGENT_V2 = 'f5-lbaasv2-process-on-agent'
 
-MIN_TMOS_MAJOR_VERSION = 11
-MIN_TMOS_MINOR_VERSION = 0
-
-DEVICE_DEFAULT_DOMAIN = ".local"
-DEVICE_HEALTH_SCORE_CPU_WEIGHT = 1
-DEVICE_HEALTH_SCORE_MEM_WEIGHT = 1
-DEVICE_HEALTH_SCORE_CPS_WEIGHT = 1
-DEVICE_HEALTH_SCORE_CPS_PERIOD = 5
-DEVICE_HEALTH_SCORE_CPS_MAX = 100
+RPC_API_VERSION = '1.0'
+RPC_API_NAMESPACE = ""

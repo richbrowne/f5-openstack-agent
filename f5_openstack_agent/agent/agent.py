@@ -25,8 +25,8 @@ from neutron.agent.linux import interface
 from neutron.common import config as common_config
 from neutron.common import rpc as n_rpc
 
-import f5_openstack_agent.lbaasv2.drivers.bigip.agent_manager as manager
-import f5_openstack_agent.lbaasv2.drivers.bigip.constants_v2 as f5constants
+import f5_openstack_agent.agent.agent_manager as manager
+import f5_openstack_agent.agent.constants_v2 as f5_const
 
 LOG = logging.getLogger(__name__)
 
@@ -70,7 +70,7 @@ def main():
 
     svc = F5AgentService(
         host=mgr.agent_host,
-        topic=f5constants.TOPIC_LOADBALANCER_AGENT_V2,
+        topic=f5_const.TOPIC_LOADBALANCER_AGENT_V2,
         manager=mgr
     )
     service.launch(cfg.CONF, svc).wait()
