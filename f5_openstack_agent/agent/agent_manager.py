@@ -34,9 +34,9 @@ from neutron import context as ncontext
 from neutron.plugins.ml2.drivers.l2pop import rpc as l2pop_rpc
 from neutron_lbaas.services.loadbalancer import constants as lb_const
 
+from f5_openstack_agent.agent import agent_rpc as f5_agent_rpc
 from f5_openstack_agent.agent import constants_v2 as f5_const
 from f5_openstack_agent.agent import plugin_rpc
-from f5_openstack_agent.agent import agent_rpc as f5_agent_rpc
 
 LOG = logging.getLogger(__name__)
 
