@@ -85,6 +85,12 @@ class ClusterManager(object):
 
         return None
 
+    def get_device_info(self, bigip):
+        """Get device information for the current device being queried."""
+        device = [device for device in self.devices
+                  if device.selfDevice == 'true']
+        return device[0]
+
     def get_mgmt_addr_by_device(self, bigip, device_name):
         devices = self.devices(bigip)
         for device in devices:

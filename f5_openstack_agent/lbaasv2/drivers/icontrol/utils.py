@@ -129,28 +129,10 @@ def get_filter(bigip, key, op, value):
 
 
 def strip_cidr_netmask(ip_address):
-    '''Strip the /XX from the end of a CIDR address
-
-    :param ip_address: str -- IP address string
-    :returns: str -- IP address without mask
-    :raises: IpNotInCidrNotation
-    '''
-
+    """Strip the /XX from the end of a CIDR address."""
     split_ip = ip_address.split('/')
     if len(split_ip) is 2:
         return split_ip[0]
     else:
         msg = 'The IP address provided was not in CIDR notation.'
         raise IpNotInCidrNotation(msg)
-
-
-def get_device_info(bigip):
-    '''Get device information for the current device being queried
-
-    :param bigip: ManagementRoot object --- device to query
-    :returns: ManagementRoot object
-    '''
-
-    coll = bigip.tm.cm.devices.get_collection()
-    device = [device for device in coll if device.selfDevice == 'true']
-    return device[0]

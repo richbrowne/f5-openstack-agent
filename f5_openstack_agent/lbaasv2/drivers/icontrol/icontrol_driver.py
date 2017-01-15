@@ -36,6 +36,12 @@ from oslo_utils import importutils
 
 from f5.bigip import ManagementRoot
 
+from f5_openstack_agent.lbaasv2.drivers.icontrol import \
+    ClusterManager
+from f5_openstack_agent.lbaasv2.drivers.icontrol.system_helper import \
+    SystemHelper
+from f5_openstack_agent.lbaasv2.drivers.lbaas_driver import LBaaSBaseDriver
+
 LOG = logging.getLogger(__name__)
 
 NS_PREFIX = 'qlbaas-'
@@ -44,10 +50,6 @@ __VERSION__ = '10.0.0'
 # Configuration objects specific to iControl® driver
 # See /etc/neutron/services/f5/f5-openstack-agent.ini
 OPTS = [  # XXX maybe we should make this a dictionary
-    cfg.StrOpt(
-        'f5_device_type', default='external',
-        help='What type of device onboarding'
-    ),
     cfg.StrOpt(
         'f5_ha_type', default='pair',
         help='Are we standalone, pair(active/standby), or scalen'
@@ -158,27 +160,39 @@ class iControlDriver(LBaaSBaseDriver):
         if registerOpts:
             self.conf.register_opts(OPTS)
 
+        # Connection to every bigip device succeeded
+        self.connected = False
+        self.last_connect_attempt = None
+
+        # Initialization completed successfully
         self.initialized = False
-        self.hostnames = None
-        self.device_type = conf.f5_device_type
 
         self.plugin_rpc = None  # overrides base, same value
 
-        self.connected = False  # overrides base, same value
-        self.last_connect_attempt = None
-
         self.driver_name = 'f5-lbaasv2-icontrol'
+
+        # Helpers
+        self.system_helper = None
+        self.cluster_manager = None
 
         # BIG-IP® containers
         self.__bigips = {}
         self.__traffic_groups = []
 
+        # List of icontrol hostnames from configuration
+        self.hostnames = []
+
+        # Get BIG-IP® hosts and check credentials.
         self._init_bigip_hostnames()
 
-        # self._init_bigip_managers()
+        # Initialize manager/helper classes.
+        self._init_bigip_managers()
 
+        # Connect to and initialize each device.
         self._init_bigips()
 
+        # Initialize agent configuration reported to Neutron
+        local_ips = []
         self._init_agent_config(local_ips)
 
         self.initialized = True
@@ -188,7 +202,7 @@ class iControlDriver(LBaaSBaseDriver):
         # is fully connected
         pass
 
-    def _pre_init_agent_configuration(self):
+    def _init_agent_configuration(self, local_ips):
         # Initialize the agent configuration
         self.agent_configurations = {}
         if self.conf.f5_global_routed_mode:
@@ -204,8 +218,8 @@ class iControlDriver(LBaaSBaseDriver):
             self.agent_configurations['bridge_mappings'] = {}
         else:
             self.agent_configurations['tunnel_types'] = \
-                self.conf.advertised_tunnel_types
-            for net_id in self.conf.common_network_ids:
+                self.conf.f5_advertised_tunnel_types
+            for net_id in self.conf.f5_common_network_ids:
                 LOG.debug('network %s will be mapped to /Common/%s'
                           % (net_id, self.conf.f5_common_network_ids[net_id]))
 
@@ -216,12 +230,16 @@ class iControlDriver(LBaaSBaseDriver):
 
         self.agent_configurations['device_drivers'] = [self.driver_name]
 
-    def _init_bigip_managers(self):
 
-        pass
+        self.agent_configurations['tunneling_ips'] = local_ips
+        self.agent_configurations['icontrol_endpoints'] = icontrol_endpoints
+
+        if self.network_builder:
+            self.agent_configurations['bridge_mappings'] = \
+                self.network_builder.interface_mapping
 
     def _init_bigip_hostnames(self):
-        # Validate and parse bigip credentials
+        """Parse hostnames and verify bigip creds exist."""
         if not self.conf.icontrol_hostname:
             raise InvalidConfigurationOption(
                 opt_name='icontrol_hostname',
@@ -242,6 +260,11 @@ class iControlDriver(LBaaSBaseDriver):
         self.hostnames = [item.strip() for item in self.hostnames]
         self.hostnames = sorted(self.hostnames)
 
+    def _init_bigip_managers(self):
+        self.cluster_manager = ClusterManager()
+        self.system_helper = SystemHelper()
+        self.network_builder = None
+
     def _init_bigips(self):
         # Connect to all BIG-IP®s
         if self.connected:
@@ -260,7 +283,8 @@ class iControlDriver(LBaaSBaseDriver):
 
             self.last_connect_attempt = datetime.datetime.now()
 
-            first_bigip = self._open_bigip(self.hostnames[0])
+            first_bigip = self._open_bigip_connection(
+                self.hostnames[0])
             self._init_bigip(first_bigip, self.hostnames[0], None)
             self.__bigips[self.hostnames[0]] = first_bigip
 
@@ -269,9 +293,9 @@ class iControlDriver(LBaaSBaseDriver):
 
             # connect to the rest of the devices
             for hostname in self.hostnames[1:]:
-                bigip = self._open_bigip(hostname)
-                self._init_bigip(bigip, hostname, device_group_name)
+                bigip = self._open_bigip_connection(hostname)
                 self.__bigips[hostname] = bigip
+                self._init_bigip(bigip, self.hostnames[0], device_group_name)
 
             self.connected = True
 
@@ -286,8 +310,8 @@ class iControlDriver(LBaaSBaseDriver):
             greenthread.sleep(5)  # this should probably go away
             raise
 
-    def _open_bigip(self, hostname):
-        """Open bigip connection."""
+    def _open_bigip_connection(self, hostname):
+        """Open bigip connection and initialize device."""
         LOG.info('Opening iControl connection to %s @ %s' %
                  (self.conf.icontrol_username, hostname))
 
@@ -343,10 +367,9 @@ class iControlDriver(LBaaSBaseDriver):
                         'Common network %s on %s does not exist'
                         % (network, bigip.hostname))
 
+        # Add extra attributes.
         bigip.device_name = self.cluster_manager.get_device_name(bigip)
         bigip.mac_addresses = self.system_helper.get_mac_addresses(bigip)
-        LOG.debug("Initialized BIG-IP %s with MAC addresses %s" %
-                  (bigip.device_name, ', '.join(bigip.mac_addresses)))
         bigip.device_interfaces = \
             self.system_helper.get_interface_macaddresses_dict(bigip)
         bigip.assured_networks = {}
@@ -363,6 +386,7 @@ class iControlDriver(LBaaSBaseDriver):
         LOG.debug('Connected to iControl %s @ %s ver %s.%s'
                   % (self.conf.icontrol_username, hostname,
                      major_version, minor_version))
+
         return bigip
 
     def _validate_ha(self, first_bigip):
@@ -403,26 +427,6 @@ class iControlDriver(LBaaSBaseDriver):
                             first_bigip, device))
                 self.hostnames = mgmt_addrs
         return device_group_name
-
-    def _post_init_agent_config(self, local_ips):
-        # Init agent config
-        icontrol_endpoints = {}
-        for host in self.__bigips:
-            hostbigip = self.__bigips[host]
-            ic_host = {}
-            ic_host['version'] = self.system_helper.get_version(hostbigip)
-            ic_host['device_name'] = hostbigip.device_name
-            ic_host['platform'] = self.system_helper.get_platform(hostbigip)
-            ic_host['serial_number'] = self.system_helper.get_serial_number(
-                hostbigip)
-            icontrol_endpoints[host] = ic_host
-
-        self.agent_configurations['tunneling_ips'] = local_ips
-        self.agent_configurations['icontrol_endpoints'] = icontrol_endpoints
-
-        if self.network_builder:
-            self.agent_configurations['bridge_mappings'] = \
-                self.network_builder.interface_mapping
 
     def _init_traffic_groups(self, bigip):
         self.__traffic_groups = self.cluster_manager.get_traffic_groups(bigip)
@@ -603,7 +607,6 @@ class iControlDriver(LBaaSBaseDriver):
 
     def tunnel_sync(self):
         # Only sync when supported types are present
-        pass
 
         # Tunnel sync sent.
         return True
@@ -638,7 +641,7 @@ class iControlDriver(LBaaSBaseDriver):
         raise urllib2.URLError('cannot communicate to any bigips')
 
     def get_bigip_hosts(self):
-        # Get all big-ips hostnames under management
+        # Get all big-ip hostnames under management
         return self.__bigips
 
     def get_all_bigips(self):
