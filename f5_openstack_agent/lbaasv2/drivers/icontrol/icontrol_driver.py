@@ -36,10 +36,14 @@ from oslo_utils import importutils
 
 from f5.bigip import ManagementRoot
 
-from f5_openstack_agent.lbaasv2.drivers.icontrol import \
+from f5_openstack_agent.lbaasv2.drivers.icontrol.cluster_manager import \
     ClusterManager
+from f5_openstack_agent.lbaasv2.drivers.icontrol import constants_v2 as f5const
+from f5_openstack_agent.lbaasv2.drivers.icontrol import exceptions as f5ex
 from f5_openstack_agent.lbaasv2.drivers.icontrol.system_helper import \
     SystemHelper
+from f5_openstack_agent.lbaasv2.drivers.icontrol.utils import serialized
+
 from f5_openstack_agent.lbaasv2.drivers.lbaas_driver import LBaaSBaseDriver
 
 LOG = logging.getLogger(__name__)
@@ -101,7 +105,7 @@ OPTS = [  # XXX maybe we should make this a dictionary
         'f5_max_namespaces_per_tenant', default=1,
         help='How many routing tables the BIG-IP will allocate per tenant'
              ' in order to accommodate overlapping IP subnets'
-    )
+    ),
     cfg.BoolOpt(
         'f5_common_external_networks', default=True,
         help='Treat external networks as common'
@@ -154,7 +158,7 @@ class iControlDriver(LBaaSBaseDriver):
         # The registerOpts parameter allows a test to
         # turn off config option handling so that it can
         # set the options manually instead. """
-        super(iControlDriver, self).__init__(conf)
+        super(iControlDriver, self).__init__()
 
         self.conf = conf
         if registerOpts:
@@ -193,7 +197,7 @@ class iControlDriver(LBaaSBaseDriver):
 
         # Initialize agent configuration reported to Neutron
         local_ips = []
-        self._init_agent_config(local_ips)
+        self._init_agent_configuration(local_ips)
 
         self.initialized = True
 
@@ -230,6 +234,14 @@ class iControlDriver(LBaaSBaseDriver):
 
         self.agent_configurations['device_drivers'] = [self.driver_name]
 
+        icontrol_endpoints = {}
+        for host,bigip in self.__bigips.iteritems():
+            ic_host = {}
+            ic_host['version'] = self.system_helper.get_version(bigip)
+            ic_host['device_name'] = bigip.device_name
+            ic_host['platform'] = self.system_helper.get_platform(bigip)
+            ic_host['serial_number'] = self.system_helper.get_serial_number(bigip)
+            icontrol_endpoints[host] = ic_host
 
         self.agent_configurations['tunneling_ips'] = local_ips
         self.agent_configurations['icontrol_endpoints'] = icontrol_endpoints
@@ -266,6 +278,7 @@ class iControlDriver(LBaaSBaseDriver):
         self.network_builder = None
 
     def _init_bigips(self):
+
         # Connect to all BIG-IP®s
         if self.connected:
             return
@@ -312,7 +325,7 @@ class iControlDriver(LBaaSBaseDriver):
 
     def _open_bigip_connection(self, hostname):
         """Open bigip connection and initialize device."""
-        LOG.info('Opening iControl connection to %s @ %s' %
+        LOG.debug('Opening iControl connection to %s @ %s' %
                  (self.conf.icontrol_username, hostname))
 
         return ManagementRoot(hostname,
@@ -321,7 +334,6 @@ class iControlDriver(LBaaSBaseDriver):
 
     def _init_bigip(self, bigip, hostname, check_group_name=None):
         """Prepare a bigip for usage."""
-
         major_version, minor_version = self._validate_bigip_version(
             bigip, hostname)
 
