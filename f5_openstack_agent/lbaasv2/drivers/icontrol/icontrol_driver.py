@@ -26,6 +26,7 @@ from time import time
 from neutron.common.exceptions import InvalidConfigurationOption
 from neutron.common.exceptions import NeutronException
 from neutron.plugins.common import constants as plugin_const
+
 from neutron_lbaas.services.loadbalancer import constants as lb_const
 
 from oslo_config import cfg
@@ -38,10 +39,10 @@ from f5.bigip import ManagementRoot
 LOG = logging.getLogger(__name__)
 
 NS_PREFIX = 'qlbaas-'
-__VERSION__ = '0.1.1'
+__VERSION__ = '10.0.0'
 
-# configuration objects specific to iControl® driver
-# XXX see /etc/neutron/services/f5/f5-openstack-agent.ini
+# Configuration objects specific to iControl® driver
+# See /etc/neutron/services/f5/f5-openstack-agent.ini
 OPTS = [  # XXX maybe we should make this a dictionary
     cfg.StrOpt(
         'f5_device_type', default='external',
@@ -146,28 +147,48 @@ def is_connected(method):
 
 
 class iControlDriver(LBaaSBaseDriver):
-    '''gets rpc plugin from manager (which instantiates, via importutils'''
 
     def __init__(self, conf, registerOpts=True):
         # The registerOpts parameter allows a test to
         # turn off config option handling so that it can
         # set the options manually instead. """
         super(iControlDriver, self).__init__(conf)
+
         self.conf = conf
         if registerOpts:
             self.conf.register_opts(OPTS)
+
         self.initialized = False
         self.hostnames = None
         self.device_type = conf.f5_device_type
+
         self.plugin_rpc = None  # overrides base, same value
-        self.__last_connect_attempt = None
+
         self.connected = False  # overrides base, same value
+        self.last_connect_attempt = None
+
         self.driver_name = 'f5-lbaasv2-icontrol'
 
         # BIG-IP® containers
         self.__bigips = {}
         self.__traffic_groups = []
 
+        self._init_bigip_hostnames()
+
+        # self._init_bigip_managers()
+
+        self._init_bigips()
+
+        self._init_agent_config(local_ips)
+
+        self.initialized = True
+
+    def post_init(self):
+        # run any post initialized tasks, now that the agent
+        # is fully connected
+        pass
+
+    def _pre_init_agent_configuration(self):
         # Initialize the agent configuration
         self.agent_configurations = {}
         if self.conf.f5_global_routed_mode:
@@ -195,57 +216,9 @@ class iControlDriver(LBaaSBaseDriver):
 
         self.agent_configurations['device_drivers'] = [self.driver_name]
 
-        self._init_bigip_hostnames()
-
-        # self._init_bigip_managers()
-
-        self._init_bigips()
-
-        self._init_agent_config(local_ips)
-
-        self.initialized = True
-
-    def post_init(self):
-        # run any post initialized tasks, now that the agent
-        # is fully connected
-        if self.vlan_binding:
-            LOG.debug(
-                'Getting BIG-IP device interface for VLAN Binding')
-            self.vlan_binding.register_bigip_interfaces()
-
-        if self.l3_binding:
-            LOG.debug('Getting BIG-IP MAC Address for L3 Binding')
-            self.l3_binding.register_bigip_mac_addresses()
-
     def _init_bigip_managers(self):
 
-        if self.conf.vlan_binding_driver:
-            try:
-                self.vlan_binding = importutils.import_object(
-                    self.conf.vlan_binding_driver, self.conf, self)
-            except ImportError:
-                LOG.error('Failed to import VLAN binding driver: %s'
-                          % self.conf.vlan_binding_driver)
-
-        if self.conf.l3_binding_driver:
-            try:
-                self.l3_binding = importutils.import_object(
-                    self.conf.l3_binding_driver, self.conf, self)
-            except ImportError:
-                LOG.error('Failed to import L3 binding driver: %s'
-                          % self.conf.l3_binding_driver)
-        else:
-            LOG.debug('No L3 binding driver configured.'
-                      ' No L3 binding will be done.')
-
-        if self.conf.f5_global_routed_mode:
-            self.network_builder = None
-        else:
-            self.network_builder = NetworkServiceBuilder(
-                self.conf.f5_global_routed_mode,
-                self.conf,
-                self,
-                self.l3_binding)
+        pass
 
     def _init_bigip_hostnames(self):
         # Validate and parse bigip credentials
@@ -285,7 +258,7 @@ class iControlDriver(LBaaSBaseDriver):
                 requests_log.setLevel(std_logging.DEBUG)
                 requests_log.propagate = True
 
-            self.__last_connect_attempt = datetime.datetime.now()
+            self.last_connect_attempt = datetime.datetime.now()
 
             first_bigip = self._open_bigip(self.hostnames[0])
             self._init_bigip(first_bigip, self.hostnames[0], None)
@@ -431,7 +404,7 @@ class iControlDriver(LBaaSBaseDriver):
                 self.hostnames = mgmt_addrs
         return device_group_name
 
-    def _init_agent_config(self, local_ips):
+    def _post_init_agent_config(self, local_ips):
         # Init agent config
         icontrol_endpoints = {}
         for host in self.__bigips:
