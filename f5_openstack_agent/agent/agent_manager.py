@@ -42,8 +42,8 @@ LOG = logging.getLogger(__name__)
 
 # XXX OPTS is used in (at least) agent.py Maybe move/rename to agent.py
 OPTS = [
-    cfg.StrOpt(  # XXX should we use this with internal classes?
-        'f5_bigip_lbaas_device_driver',  # XXX maybe remove "device" and "f5"?
+    cfg.StrOpt(
+        'f5_bigip_lbaas_device_driver',
         default=('f5_openstack_agent.lbaasv2.drivers.bigip.icontrol_driver.'
                  'iControlDriver'),
         help=('The driver used to provision BigIPs')
@@ -57,21 +57,6 @@ OPTS = [
         'f5_global_routed_mode',
         default=True,
         help=('Disable all L2 and L3 integration in favor of global routing')
-    ),
-    cfg.BoolOpt(
-        'use_namespaces',
-        default=True,
-        help=('Allow overlapping IP addresses for tenants')
-    ),
-    cfg.BoolOpt(
-        'f5_snat_mode',
-        default=True,
-        help=('use SNATs, not direct routed mode')
-    ),
-    cfg.IntOpt(
-        'f5_snat_addresses_per_subnet',
-        default=1,
-        help=('Interface and VLAN for the VTEP overlay network')
     ),
     cfg.StrOpt(
         'agent_id',
@@ -201,7 +186,7 @@ class LogicalServiceCache(object):
         return agent_hosts.keys()
 
 
-class LbaasAgentManager(periodic_task.PeriodicTasks):  # b --> B
+class LbaasAgentManager(periodic_task.PeriodicTasks):
     """Periodic task that is an endpoint for plugin to agent RPC."""
 
     RPC_API_VERSION = '1.0'
@@ -290,7 +275,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):  # b --> B
 
             if self.lbdriver.initialized:
                 if not self.conf.agent_id:
-                    # If not set statically, add the driver agent env hash
+                    # If not set statically, add the driver agent environment hash
                     agent_hash = str(
                         uuid.uuid5(uuid.NAMESPACE_DNS,
                                    self.conf.environment_prefix +
@@ -452,81 +437,6 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):  # b --> B
     def sync_state(self):
         """Sync state of BIG-IP with that of the neutron database."""
         resync = False
-
-        known_services = set()
-        owned_services = set()
-        for lb_id, service in self.cache.services.iteritems():
-            known_services.add(lb_id)
-            if self.agent_host == service.agent_host:
-                owned_services.add(lb_id)
-
-        try:
-            # Get loadbalancers from the environment which are bound to
-            # this agent.
-            active_loadbalancers = (
-                self.plugin_rpc.get_active_loadbalancers(host=self.agent_host)
-            )
-            active_loadbalancer_ids = set(
-                [lb['lb_id'] for lb in active_loadbalancers]
-            )
-
-            all_loadbalancers = (
-                self.plugin_rpc.get_all_loadbalancers(host=self.agent_host)
-            )
-            all_loadbalancer_ids = set(
-                [lb['lb_id'] for lb in all_loadbalancers]
-            )
-
-            LOG.debug("plugin produced the list of active loadbalancer ids: %s"
-                      % list(active_loadbalancer_ids))
-            LOG.debug("currently known loadbalancer ids before sync are: %s"
-                      % list(known_services))
-
-            # Remove services that are in Neutron, but no longer managed
-            # by this agent.
-            for deleted_lb in owned_services - all_loadbalancer_ids:
-                LOG.error("Cached service not found in neutron database")
-                # TODO(Rich Browne) -- This can't be implemented with the
-                # normal tear down b/c the RPC destroy methods walk all
-                # over one another.  Although this case suggests that the
-                # database lacks the service definitition, there could be
-                # some service objects (pools, listeners, etc.) that need
-                # to be removed from the database
-                # self.destroy_service(deleted_lb)
-
-            # Validate each service we own, i.e. loadbalancers to which this
-            # agent is bound, that does not exist in our service cache.
-            for lb_id in active_loadbalancer_ids:
-                if not self.cache.get_by_loadbalancer_id(lb_id):
-                    self.validate_service(lb_id)
-
-            # This produces a list of loadbalancers with pending tasks to
-            # be performed.
-            pending_loadbalancers = (
-                self.plugin_rpc.get_pending_loadbalancers(host=self.agent_host)
-            )
-            pending_lb_ids = set(
-                [lb['lb_id'] for lb in pending_loadbalancers]
-            )
-            LOG.debug(
-                "plugin produced the list of pending loadbalancer ids: %s"
-                % list(pending_lb_ids))
-
-            for lb_id in pending_lb_ids:
-                self.refresh_service(lb_id)
-
-            # Get a list of any cached service we now know after
-            # refreshing services
-            known_services = set()
-            for (lb_id, service) in self.cache.services.iteritems():
-                if self.agent_host == service.agent_host:
-                    known_services.add(lb_id)
-            LOG.debug("currently known loadbalancer ids after sync: %s"
-                      % list(known_services))
-
-        except Exception as e:
-            LOG.error("Unable to retrieve ready service: %s" % e.message)
-            resync = True
 
         return resync
 

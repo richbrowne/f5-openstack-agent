@@ -34,33 +34,6 @@ from oslo_log import log as logging
 from oslo_utils import importutils
 
 from f5.bigip import ManagementRoot
-from f5_openstack_agent.lbaasv2.drivers.bigip.cluster_manager import \
-    ClusterManager
-from f5_openstack_agent.lbaasv2.drivers.bigip import constants_v2 as f5const
-from f5_openstack_agent.lbaasv2.drivers.bigip.disconnected_service import \
-    DisconnectedService
-from f5_openstack_agent.lbaasv2.drivers.bigip.disconnected_service import \
-    DisconnectedServicePolling
-from f5_openstack_agent.lbaasv2.drivers.bigip import exceptions as f5ex
-from f5_openstack_agent.lbaasv2.drivers.bigip.lbaas_builder import \
-    LBaaSBuilder
-from f5_openstack_agent.lbaasv2.drivers.bigip.lbaas_driver import \
-    LBaaSBaseDriver
-from f5_openstack_agent.lbaasv2.drivers.bigip import network_helper
-from f5_openstack_agent.lbaasv2.drivers.bigip.network_service import \
-    NetworkServiceBuilder
-from f5_openstack_agent.lbaasv2.drivers.bigip import resource_helper
-from f5_openstack_agent.lbaasv2.drivers.bigip.service_adapter import \
-    ServiceModelAdapter
-from f5_openstack_agent.lbaasv2.drivers.bigip import ssl_profile
-from f5_openstack_agent.lbaasv2.drivers.bigip import stat_helper
-from f5_openstack_agent.lbaasv2.drivers.bigip.system_helper import \
-    SystemHelper
-from f5_openstack_agent.lbaasv2.drivers.bigip.tenants import \
-    BigipTenantManager
-from f5_openstack_agent.lbaasv2.drivers.bigip.utils import serialized
-from f5_openstack_agent.lbaasv2.drivers.bigip.virtual_address import \
-    VirtualAddress
 
 LOG = logging.getLogger(__name__)
 
@@ -70,52 +43,6 @@ __VERSION__ = '0.1.1'
 # configuration objects specific to iControl® driver
 # XXX see /etc/neutron/services/f5/f5-openstack-agent.ini
 OPTS = [  # XXX maybe we should make this a dictionary
-    cfg.StrOpt(
-        'bigiq_hostname',
-        help='The hostname (name or IP address) to use for the BIG-IQ host'
-    ),
-    cfg.StrOpt(
-        'bigiq_admin_username',
-        default='admin',
-        help='The admin username to use for BIG-IQ authentication',
-    ),
-    cfg.StrOpt(
-        'bigiq_admin_password',
-        default='[Provide password in config file]',
-        secret=True,
-        help='The admin password to use for BIG-IQ authentication'
-    ),
-    cfg.StrOpt(
-        'openstack_keystone_uri',
-        default='http://192.0.2.248:5000/',
-        help='The admin password to use for BIG-IQ authentication'
-    ),
-    cfg.StrOpt(
-        'openstack_admin_username',
-        default='admin',
-        help='The admin username to use for authentication '
-             'with the Keystone service'
-    ),
-    cfg.StrOpt(
-        'openstack_admin_password',
-        default='[Provide password in config file]',
-        secret=True,
-        help='The admin password to use for authentication'
-             ' with the Keystone service'
-    ),
-    cfg.StrOpt(
-        'bigip_management_username',
-        default='admin',
-        help='The admin username that the BIG-IQ will use to manage '
-             'discovered BIG-IPs'
-    ),
-    cfg.StrOpt(
-        'bigip_management_password',
-        default='[Provide password in config file]',
-        secret=True,
-        help='The admin password that the BIG-IQ will use to manage '
-             'discovered BIG-IPs'
-    ),
     cfg.StrOpt(
         'f5_device_type', default='external',
         help='What type of device onboarding'
@@ -128,6 +55,10 @@ OPTS = [  # XXX maybe we should make this a dictionary
         'f5_external_physical_mappings', default=['default:1.1:True'],
         help='Mapping between Neutron physical_network to interfaces'
     ),
+    cfg.DictOpt(
+        'f5_common_network_ids', default={},
+        help='network uuid to existing Common networks mapping'
+    ),
     cfg.StrOpt(
         'f5_vtep_folder', default='Common',
         help='Folder for the VTEP SelfIP'
@@ -137,48 +68,40 @@ OPTS = [  # XXX maybe we should make this a dictionary
         help='Name of the VTEP SelfIP'
     ),
     cfg.ListOpt(
-        'advertised_tunnel_types', default=['gre', 'vxlan'],
+        'f5_advertised_tunnel_types', default=['gre', 'vxlan'],
         help='tunnel types which are advertised to other VTEPs'
     ),
     cfg.BoolOpt(
         'f5_populate_static_arp', default=False,
         help='create static arp entries based on service entries'
     ),
-    cfg.StrOpt(
-        'vlan_binding_driver',
-        default=None,
-        help='driver class for binding vlans to device ports'
+    cfg.BoolOpt(
+        'f5_snat_mode',
+        default=True,
+        help=('use SNATs, not direct routed mode')
     ),
-    cfg.StrOpt(
-        'interface_port_static_mappings',
-        default=None,
-        help='JSON encoded static mapping of'
-             'devices to list of '
-             'interface and port_id'
+    cfg.IntOpt(
+        'f5_snat_addresses_per_subnet',
+        default=1,
+        help=('Interface and VLAN for the VTEP overlay network')
     ),
-    cfg.StrOpt(
-        'l3_binding_driver',
-        default=None,
-        help='driver class for binding l3 address to l2 ports'
-    ),
-    cfg.StrOpt(
-        'l3_binding_static_mappings', default=None,
-        help='JSON encoded static mapping of'
-             'subnet_id to list of '
-             'port_id, device_id list.'
+    cfg.BoolOpt(
+        'f5_use_namespaces',
+        default=True,
+        help=('Allow overlapping IP addresses for tenants')
     ),
     cfg.BoolOpt(
         'f5_route_domain_strictness', default=False,
         help='Strict route domain isolation'
     ),
+    cfg.IntOpt(
+        'f5_max_namespaces_per_tenant', default=1,
+        help='How many routing tables the BIG-IP will allocate per tenant'
+             ' in order to accommodate overlapping IP subnets'
+    )
     cfg.BoolOpt(
         'f5_common_external_networks', default=True,
         help='Treat external networks as common'
-    ),
-    cfg.StrOpt(
-        'icontrol_vcmp_hostname',
-        help='The hostname (name or IP address) to use for vCMP Host '
-             'iControl access'
     ),
     cfg.StrOpt(
         'icontrol_hostname',
@@ -200,88 +123,6 @@ OPTS = [  # XXX maybe we should make this a dictionary
     cfg.IntOpt(
         'icontrol_connection_retry_interval', default=10,
         help='How many seconds to wait between retry connection attempts'
-    ),
-    cfg.DictOpt(
-        'common_network_ids', default={},
-        help='network uuid to existing Common networks mapping'
-    ),
-    cfg.StrOpt(
-        'icontrol_config_mode', default='objects',
-        help='Whether to use iapp or objects for bigip configuration'
-    ),
-    cfg.IntOpt(
-        'max_namespaces_per_tenant', default=1,
-        help='How many routing tables the BIG-IP will allocate per tenant'
-             ' in order to accommodate overlapping IP subnets'
-    ),
-    cfg.StrOpt(
-        'cert_manager',
-        default=None,
-        help='Class name of the certificate mangager used for retrieving '
-             'certificates and keys.'
-    ),
-    cfg.StrOpt(
-        'auth_version',
-        default=None,
-        help='Keystone authentication version (v2 or v3) for Barbican client.'
-    ),
-    cfg.StrOpt(
-        'os_project_id',
-        default='service',
-        help='OpenStack project ID.'
-    ),
-    cfg.StrOpt(
-        'os_auth_url',
-        default=None,
-        help='OpenStack authentication URL.'
-    ),
-    cfg.StrOpt(
-        'os_username',
-        default=None,
-        help='OpenStack user name for Keystone authentication.'
-    ),
-    cfg.StrOpt(
-        'os_user_domain_name',
-        default=None,
-        help='OpenStack user domain name for Keystone authentication.'
-    ),
-    cfg.StrOpt(
-        'os_project_name',
-        default=None,
-        help='OpenStack project name for Keystone authentication.'
-    ),
-    cfg.StrOpt(
-        'os_project_domain_name',
-        default=None,
-        help='OpenStack domain name for Keystone authentication.'
-    ),
-    cfg.StrOpt(
-        'os_password',
-        default=None,
-        help='OpenStack user password for Keystone authentication.'
-    ),
-    cfg.StrOpt(
-        'f5_network_segment_physical_network', default=None,
-        help='Name of physical network to use for discovery of segment ID'
-    ),
-    cfg.IntOpt(
-        'f5_network_segment_polling_interval', default=10,
-        help='Seconds between periodic scans for disconnected virtual servers'
-    ),
-    cfg.IntOpt(
-        'f5_network_segment_gross_timeout', default=300,
-        help='Seconds to wait for a virtual server to become connected'
-    ),
-    cfg.StrOpt(
-        'f5_parent_ssl_profile',
-        default='clientssl',
-        help='Parent profile used when creating client SSL profiles '
-        'for listeners with TERMINATED_HTTPS protocols.'
-    ),
-    cfg.StrOpt(
-        'os_tenant_name',
-        default=None,
-        help='OpenStack tenant name for Keystone authentication (v2 only).'
     )
 ]
 
@@ -295,7 +136,7 @@ def is_connected(method):
                 return method(*args, **kwargs)
             except IOError as ioe:
                 LOG.error('IO Error detected: %s' % method.__name__)
-                instance.connect_bigips()  # what's this do?
+                instance.connect_bigips()
                 raise ioe
         else:
             LOG.error('Cannot execute %s. Not connected. Connecting.'
@@ -326,31 +167,16 @@ class iControlDriver(LBaaSBaseDriver):
         # BIG-IP® containers
         self.__bigips = {}
         self.__traffic_groups = []
-        self.agent_configurations = {}  # overrides base, same value
-        self.tenant_manager = None
-        self.cluster_manager = None
-        self.system_helper = None
-        self.lbaas_builder = None
-        self.service_adapter = None
-        self.vlan_binding = None
-        self.l3_binding = None
-        self.cert_manager = None  # overrides register_OPTS
-        self.stat_helper = stat_helper.StatHelper()
-        self.network_helper = network_helper.NetworkHelper()
-        self.disconnected_service = None
-        self.disconnected_service_polling = None
-        self.vs_manager = resource_helper.BigIPResourceHelper(
-            resource_helper.ResourceType.virtual)
-        self.pool_manager = resource_helper.BigIPResourceHelper(
-            resource_helper.ResourceType.pool)
 
+        # Initialize the agent configuration
+        self.agent_configurations = {}
         if self.conf.f5_global_routed_mode:
             LOG.info('WARNING - f5_global_routed_mode enabled.'
                      ' There will be no L2 or L3 orchestration'
                      ' or tenant isolation provisioned. All vips'
                      ' and pool members must be routable through'
                      ' pre-provisioned SelfIPs.')
-            self.conf.use_namespaces = False
+            self.conf.f5_use_namespaces = False
             self.conf.f5_snat_mode = True
             self.conf.f5_snat_addresses_per_subnet = 0
             self.agent_configurations['tunnel_types'] = []
@@ -360,46 +186,24 @@ class iControlDriver(LBaaSBaseDriver):
                 self.conf.advertised_tunnel_types
             for net_id in self.conf.common_network_ids:
                 LOG.debug('network %s will be mapped to /Common/%s'
-                          % (net_id, self.conf.common_network_ids[net_id]))
+                          % (net_id, self.conf.f5_common_network_ids[net_id]))
 
             self.agent_configurations['common_networks'] = \
-                self.conf.common_network_ids
-            LOG.debug('Setting static ARP population to %s'
-                      % self.conf.f5_populate_static_arp)
+                self.conf.f5_common_network_ids
             self.agent_configurations['f5_common_external_networks'] = \
                 self.conf.f5_common_external_networks
-            f5const.FDB_POPULATE_STATIC_ARP = self.conf.f5_populate_static_arp
 
         self.agent_configurations['device_drivers'] = [self.driver_name]
+
         self._init_bigip_hostnames()
-        self._init_bigip_managers()
-        self.connect_bigips()
 
-        # After we have a connection to the BIG-IPs, initialize vCMP
-        if self.network_builder:
-            self.network_builder.initialize_vcmp()
+        # self._init_bigip_managers()
 
-        self.agent_configurations['network_segment_physical_network'] = \
-            self.disconnected_service_polling.get_physical_network()
-
-        LOG.info('iControlDriver initialized to %d bigips with username:%s'
-                 % (len(self.__bigips), self.conf.icontrol_username))
-        LOG.info('iControlDriver dynamic agent configurations:%s'
-                 % self.agent_configurations)
-        self.initialized = True
-
-    def connect_bigips(self):
         self._init_bigips()
-        if self.conf.f5_global_routed_mode:
-            local_ips = []
-        else:
-            try:
-                local_ips = self.network_builder.initialize_tunneling()
-            except Exception:
-                LOG.error("Error creating BigIP VTEPs in connect_bigips")
-                raise
 
         self._init_agent_config(local_ips)
+
+        self.initialized = True
 
     def post_init(self):
         # run any post initialized tasks, now that the agent
@@ -413,9 +217,6 @@ class iControlDriver(LBaaSBaseDriver):
             LOG.debug('Getting BIG-IP MAC Address for L3 Binding')
             self.l3_binding.register_bigip_mac_addresses()
 
-        if self.network_builder:
-            self.network_builder.post_init()
-
     def _init_bigip_managers(self):
 
         if self.conf.vlan_binding_driver:
@@ -427,7 +228,6 @@ class iControlDriver(LBaaSBaseDriver):
                           % self.conf.vlan_binding_driver)
 
         if self.conf.l3_binding_driver:
-            print('self.conf.l3_binding_driver')
             try:
                 self.l3_binding = importutils.import_object(
                     self.conf.l3_binding_driver, self.conf, self)
@@ -437,27 +237,6 @@ class iControlDriver(LBaaSBaseDriver):
         else:
             LOG.debug('No L3 binding driver configured.'
                       ' No L3 binding will be done.')
-
-        if self.conf.cert_manager:
-            try:
-                self.cert_manager = importutils.import_object(
-                    self.conf.cert_manager, self.conf)
-            except ImportError as import_err:
-                LOG.error('Failed to import CertManager: %s.' %
-                          import_err.message)
-                raise
-            except Exception as err:
-                LOG.error('Failed to initialize CertManager. %s' % err.message)
-                # re-raise as ImportError to cause agent exit
-                raise ImportError(err.message)
-
-        self.service_adapter = ServiceModelAdapter(self.conf)
-        self.tenant_manager = BigipTenantManager(self.conf, self)
-        self.cluster_manager = ClusterManager()
-        self.system_helper = SystemHelper()
-        self.lbaas_builder = LBaaSBuilder(self.conf, self)
-        self.disconnected_service = DisconnectedService()
-        self.disconnected_service_polling = DisconnectedServicePolling(self)
 
         if self.conf.f5_global_routed_mode:
             self.network_builder = None
@@ -496,13 +275,10 @@ class iControlDriver(LBaaSBaseDriver):
             return
         try:
             if not self.conf.debug:
-                sudslog = std_logging.getLogger('suds.client')
-                sudslog.setLevel(std_logging.FATAL)
                 requests_log = std_logging.getLogger(
                     "requests.packages.urllib3")
                 requests_log.setLevel(std_logging.ERROR)
                 requests_log.propagate = False
-
             else:
                 requests_log = std_logging.getLogger(
                     "requests.packages.urllib3")
@@ -538,7 +314,7 @@ class iControlDriver(LBaaSBaseDriver):
             raise
 
     def _open_bigip(self, hostname):
-        # Open bigip connection """
+        """Open bigip connection."""
         LOG.info('Opening iControl connection to %s @ %s' %
                  (self.conf.icontrol_username, hostname))
 
@@ -547,7 +323,7 @@ class iControlDriver(LBaaSBaseDriver):
                               self.conf.icontrol_password)
 
     def _init_bigip(self, bigip, hostname, check_group_name=None):
-        # Prepare a bigip for usage
+        """Prepare a bigip for usage."""
 
         major_version, minor_version = self._validate_bigip_version(
             bigip, hostname)
@@ -675,64 +451,35 @@ class iControlDriver(LBaaSBaseDriver):
             self.agent_configurations['bridge_mappings'] = \
                 self.network_builder.interface_mapping
 
-    def generate_capacity_score(self, capacity_policy=None):
-        """Generate the capacity score of connected devices """
-        if capacity_policy:
-            highest_metric = 0.0
-            highest_metric_name = None
-            my_methods = dir(self)
-            bigips = self.get_all_bigips()
-            for metric in capacity_policy:
-                func_name = 'get_' + metric
-                if func_name in my_methods:
-                    max_capacity = int(capacity_policy[metric])
-                    metric_func = getattr(self, func_name)
-                    metric_value = 0
-                    for bigip in bigips:
-                        global_stats = \
-                            self.stat_helper.get_global_statistics(bigip)
-                        value = int(
-                            metric_func(bigip=bigip,
-                                        global_statistics=global_stats)
-                        )
-                        LOG.debug('calling capacity %s on %s returned: %s'
-                                  % (func_name, bigip.hostname, value))
-                        if value > metric_value:
-                            metric_value = value
-                    metric_capacity = float(metric_value) / float(max_capacity)
-                    if metric_capacity > highest_metric:
-                        highest_metric = metric_capacity
-                        highest_metric_name = metric
-                else:
-                    LOG.warn('capacity policy has method '
-                             '%s which is not implemented in this driver'
-                             % metric)
-            LOG.debug('capacity score: %s based on %s'
-                      % (highest_metric, highest_metric_name))
-            return highest_metric
-        return 0
+    def _init_traffic_groups(self, bigip):
+        self.__traffic_groups = self.cluster_manager.get_traffic_groups(bigip)
+        if 'traffic-group-local-only' in self.__traffic_groups:
+            self.__traffic_groups.remove('traffic-group-local-only')
+        self.__traffic_groups.sort()
+
+    def _validate_bigip_version(self, bigip, hostname):
+        # Ensure the BIG-IP® has sufficient version
+        major_version = self.system_helper.get_major_version(bigip)
+        if major_version < f5const.MIN_TMOS_MAJOR_VERSION:
+            raise f5ex.MajorVersionValidateFailed(
+                'Device %s must be at least TMOS %s.%s'
+                % (hostname, f5const.MIN_TMOS_MAJOR_VERSION,
+                   f5const.MIN_TMOS_MINOR_VERSION))
+        minor_version = self.system_helper.get_minor_version(bigip)
+        if minor_version < f5const.MIN_TMOS_MINOR_VERSION:
+            raise f5ex.MinorVersionValidateFailed(
+                'Device %s must be at least TMOS %s.%s'
+                % (hostname, f5const.MIN_TMOS_MAJOR_VERSION,
+                   f5const.MIN_TMOS_MINOR_VERSION))
+        return major_version, minor_version
 
     def set_context(self, context):
         # Context to keep for database access
-        if self.network_builder:
-            self.network_builder.set_context(context)
+        pass
 
     def set_plugin_rpc(self, plugin_rpc):
         # Provide Plugin RPC access
         self.plugin_rpc = plugin_rpc
-
-    def set_tunnel_rpc(self, tunnel_rpc):
-        # Provide FDB Connector with ML2 RPC access
-        if self.network_builder:
-            self.network_builder.set_tunnel_rpc(tunnel_rpc)
-
-    def set_l2pop_rpc(self, l2pop_rpc):
-        # Provide FDB Connector with ML2 RPC access
-        if self.network_builder:
-            self.network_builder.set_l2pop_rpc(l2pop_rpc)
-
-    def service_exists(self, service):
-        return self._service_exists(service)
 
     def flush_cache(self):
         # Remove cached objects so they can be created if necessary
@@ -849,82 +596,33 @@ class iControlDriver(LBaaSBaseDriver):
 
     @is_connected
     def get_stats(self, service):
-        lb_stats = {}
-        stats = ['clientside.bitsIn',
-                 'clientside.bitsOut',
-                 'clientside.curConns',
-                 'clientside.totConns']
-        loadbalancer = service['loadbalancer']
+        pass
 
-        try:
-            # sum virtual server stats for all BIG-IPs
-            vs_stats = self.lbaas_builder.get_listener_stats(service, stats)
+    def set_tunnel_rpc(self, tunnel_rpc):
+        # Provide FDB Connector with ML2 RPC access
+        pass
 
-            # convert to bytes
-            lb_stats[lb_const.STATS_IN_BYTES] = \
-                vs_stats['clientside.bitsIn']/8
-            lb_stats[lb_const.STATS_OUT_BYTES] = \
-                vs_stats['clientside.bitsOut']/8
-            lb_stats[lb_const.STATS_ACTIVE_CONNECTIONS] = \
-                vs_stats['clientside.curConns']
-            lb_stats[lb_const.STATS_TOTAL_CONNECTIONS] = \
-                vs_stats['clientside.totConns']
-
-            # update Neutron
-            self.plugin_rpc.update_loadbalancer_stats(
-                loadbalancer['id'], lb_stats)
-        except Exception as e:
-            LOG.error("Error getting loadbalancer stats: %s", e.message)
-
-        finally:
-            return lb_stats
-
-    @serialized('remove_orphans')
-    def remove_orphans(self, all_loadbalancers):
-        """Remove out-of-date configuration on big-ips """
-        existing_tenants = []
-        existing_lbs = []
-        for loadbalancer in all_loadbalancers:
-            existing_tenants.append(loadbalancer['tenant_id'])
-            existing_lbs.append(loadbalancer['lb_id'])
-
-        for bigip in self.get_all_bigips():
-            bigip.pool.purge_orphaned_pools(existing_lbs)
-        for bigip in self.get_all_bigips():
-            bigip.system.purge_orphaned_folders_contents(existing_tenants)
-
-        for bigip in self.get_all_bigips():
-            bigip.system.purge_orphaned_folders(existing_tenants)
+    def set_l2pop_rpc(self, l2pop_rpc):
+        # Provide FDB Connector with ML2 RPC access
+        pass
 
     def fdb_add(self, fdb):
         # Add (L2toL3) forwarding database entries
-        self.remove_ips_from_fdb_update(fdb)
-        for bigip in self.get_all_bigips():
-            self.network_builder.add_bigip_fdb(bigip, fdb)
+        pass
 
     def fdb_remove(self, fdb):
         # Remove (L2toL3) forwarding database entries
-        self.remove_ips_from_fdb_update(fdb)
-        for bigip in self.get_all_bigips():
-            self.network_builder.remove_bigip_fdb(bigip, fdb)
+        pass
 
     def fdb_update(self, fdb):
         # Update (L2toL3) forwarding database entries
-        self.remove_ips_from_fdb_update(fdb)
-        for bigip in self.get_all_bigips():
-            self.network_builder.update_bigip_fdb(bigip, fdb)
+        pass
 
     # remove ips from fdb update so we do not try to
     # add static arps for them because we do not have
     # enough information to determine the route domain
     def remove_ips_from_fdb_update(self, fdb):
-        for network_id in fdb:
-            network = fdb[network_id]
-            mac_ips_by_vtep = network['ports']
-            for vtep in mac_ips_by_vtep:
-                mac_ips = mac_ips_by_vtep[vtep]
-                for mac_ip in mac_ips:
-                    mac_ip[1] = None
+        pass
 
     def tunnel_update(self, **kwargs):
         # Tunnel Update from Neutron Core RPC
@@ -932,507 +630,26 @@ class iControlDriver(LBaaSBaseDriver):
 
     def tunnel_sync(self):
         # Only sync when supported types are present
-        if not [i for i in self.agent_configurations['tunnel_types']
-                if i in ['gre', 'vxlan']]:
-            return False
-
-        tunnel_ips = []
-        for bigip in self.get_all_bigips():
-            if bigip.local_ip:
-                tunnel_ips.append(bigip.local_ip)
-
-        self.network_builder.tunnel_sync(tunnel_ips)
+        pass
 
         # Tunnel sync sent.
-        return False
+        return True
 
     @serialized('sync')
     @is_connected
     def sync(self, service):
         """Sync service defintion to device"""
-        # plugin_rpc may not be set when unit testing
-        if self.plugin_rpc:
-            # Get the latest service. It may have changed.
-            service = self.plugin_rpc.get_service_by_loadbalancer_id(
-                service['loadbalancer']['id']
-            )
-        if service['loadbalancer']:
-            self._common_service_handler(service)
-        else:
-            LOG.debug("Attempted sync of deleted pool")
+        pass
 
     @serialized('backup_configuration')
     @is_connected
     def backup_configuration(self):
         # Save Configuration on Devices
-        for bigip in self.get_all_bigips():
-            LOG.debug('_backup_configuration: saving device %s.'
-                      % bigip.hostname)
-            self.cluster_manager.save_config(bigip)
-
-    def _get_monitor_endpoint(self, bigip, service):
-        monitor_type = self.service_adapter.get_monitor_type(service)
-        if not monitor_type:
-            monitor_type = ""
-
-        if monitor_type == "HTTPS":
-            hm = bigip.tm.ltm.monitor.https_s.https
-        elif monitor_type == "TCP":
-            hm = bigip.tm.ltm.monitor.tcps.tcp
-        elif monitor_type == "PING":
-            hm = bigip.tm.ltm.monitor.gateway_icmps.gateway_icmp
-        else:
-            hm = bigip.tm.ltm.monitor.https.http
-
-        return hm
-
-    def service_rename_required(self, service):
-        rename_required = False
-
-        # Returns whether the bigip has a pool for the service
-        if not service['loadbalancer']:
-            return False
-
-        bigips = self.get_config_bigips()
-        loadbalancer = service['loadbalancer']
-
-        # Does the correctly named virtual address exist?
-        for bigip in bigips:
-            virtual_address = VirtualAddress(self.service_adapter,
-                                             loadbalancer)
-            if not virtual_address.exists(bigip):
-                rename_required = True
-                break
-
-        return rename_required
-
-    def service_object_teardown(self, service):
-
-        # Returns whether the bigip has a pool for the service
-        if not service['loadbalancer']:
-            return False
-
-        bigips = self.get_config_bigips()
-        loadbalancer = service['loadbalancer']
-        folder_name = self.service_adapter.get_folder_name(
-            loadbalancer['tenant_id']
-        )
-
-        # Change to bigips
-        for bigip in bigips:
-
-            # Delete all virtuals
-            v = bigip.tm.ltm.virtuals.virtual
-            for listener in service['listeners']:
-                l_name = listener.get("name", "")
-                if not l_name:
-                    svc = {"loadbalancer": loadbalancer,
-                           "listener": listener}
-                    vip = self.service_adapter.get_virtual(svc)
-                    l_name = vip['name']
-                if v.exists(name=l_name, partition=folder_name):
-                    # Found a virtual that is named by the OS object,
-                    # delete it.
-                    l_obj = v.load(name=l_name, partition=folder_name)
-                    LOG.warn("Deleting listener: /%s/%s" %
-                             (folder_name, l_name))
-                    l_obj.delete(name=l_name, partition=folder_name)
-
-            # Delete all pools
-            p = bigip.tm.ltm.pools.pool
-            for os_pool in service['pools']:
-                p_name = os_pool.get('name', "")
-                if not p_name:
-                    svc = {"loadbalancer": loadbalancer,
-                           "pool": os_pool}
-                    pool = self.service_adapter.get_pool(svc)
-                    p_name = pool['name']
-
-                if p.exists(name=p_name, partition=folder_name):
-                    p_obj = p.load(name=p_name, partition=folder_name)
-                    LOG.warn("Deleting pool: /%s/%s" % (folder_name, p_name))
-                    p_obj.delete(name=p_name, partition=folder_name)
-
-            # Delete all healthmonitors
-            for healthmonitor in service['healthmonitors']:
-                svc = {'loadbalancer': loadbalancer,
-                       'healthmonitor': healthmonitor}
-                monitor_ep = self._get_monitor_endpoint(bigip, svc)
-
-                m_name = healthmonitor.get('name', "")
-                if not m_name:
-                    hm = self.service_adapter.get_healthmonitor(svc)
-                    m_name = hm['name']
-
-                if monitor_ep.exists(name=m_name, partition=folder_name):
-                    m_obj = monitor_ep.load(name=m_name, partition=folder_name)
-                    LOG.warn("Deleting monitor: /%s/%s" % (
-                        folder_name, m_name))
-                    m_obj.delete()
-
-    def _service_exists(self, service):
-        # Returns whether the bigip has a pool for the service
-        if not service['loadbalancer']:
-            return False
-        loadbalancer = service['loadbalancer']
-
-        folder_name = self.service_adapter.get_folder_name(
-            loadbalancer['tenant_id']
-        )
-
-        # Foreach bigip in the cluster:
-        for bigip in self.get_config_bigips():
-            # Does the tenant folder exist?
-            if not self.system_helper.folder_exists(bigip, folder_name):
-                LOG.error("Folder %s does not exists on bigip: %s" %
-                          (folder_name, bigip.hostname))
-                return False
-
-            # Get the virtual address
-            virtual_address = VirtualAddress(self.service_adapter,
-                                             loadbalancer)
-            if not virtual_address.exists(bigip):
-                LOG.error("Virtual address %s(%s) does not "
-                          "exists on bigip: %s" % (virtual_address.name,
-                                                   virtual_address.address,
-                                                   bigip.hostname))
-                return False
-
-            # Ensure that each virtual service exists.
-            for listener in service['listeners']:
-
-                svc = {"loadbalancer": loadbalancer,
-                       "listener": listener}
-                virtual_server = self.service_adapter.get_virtual_name(svc)
-                if not self.vs_manager.exists(bigip,
-                                              name=virtual_server['name'],
-                                              partition=folder_name):
-                    LOG.error("Virtual /%s/%s not found on bigip: %s" %
-                              (virtual_server['name'], folder_name,
-                               bigip.hostname))
-                    return False
-
-            # Ensure that each virtual service exists.
-            for pool in service['pools']:
-                svc = {"loadbalancer": loadbalancer,
-                       "pool": pool}
-                bigip_pool = self.service_adapter.get_pool(svc)
-                if not self.pool_manager.exists(
-                        bigip,
-                        name=bigip_pool['name'],
-                        partition=folder_name):
-                    LOG.error("Pool /%s/%s not found on bigip: %s" %
-                              (bigip_pool['name'], folder_name,
-                               bigip.hostname))
-                    return False
-
-            for healthmonitor in service['healthmonitors']:
-                svc = {"loadbalancer": loadbalancer,
-                       "healthmonitor": healthmonitor}
-                monitor = self.service_adapter.get_healthmonitor(svc)
-                monitor_ep = self._get_monitor_endpoint(bigip, svc)
-                if not monitor_ep.exists(name=monitor['name'],
-                                         partition=folder_name):
-                    LOG.error("Monitor /%s/%s not found on bigip: %s" %
-                              (monitor['name'], folder_name, bigip.hostname))
-                    return False
-
-        return True
-
-    def get_loadbalancers_in_tenant(self, tenant_id):
-        loadbalancers = self.plugin_rpc.get_all_loadbalancers()
-
-        return [lb['lb_id'] for lb in loadbalancers
-                if lb['tenant_id'] == tenant_id]
+        pass
 
     def _common_service_handler(self, service, delete_partition=False):
         # Assure that the service is configured on bigip(s)
-        start_time = time()
-
-        if not service['loadbalancer']:
-            LOG.error("_common_service_handler: Service loadbalancer is None")
-            return
-
-        try:
-            self.tenant_manager.assure_tenant_created(service)
-            LOG.debug("    _assure_tenant_created took %.5f secs" %
-                      (time() - start_time))
-
-            traffic_group = self.service_to_traffic_group(service)
-            service['loadbalancer']['traffic_group'] = traffic_group
-
-            # This loop will only run once.  Using while as a control-flow
-            # mechanism to flatten out the code by allowing breaks.
-            while (self.network_builder):
-                networks = service['networks']
-                network_id = service['loadbalancer']['network_id']
-                network = networks.get(network_id, {})
-
-                if not self.network_builder.is_common_network(network) and \
-                   not self.disconnected_service.is_service_connected(service):
-                    if self.disconnected_service_polling.enabled:
-                        # Hierarchical port-binding mode:
-                        # Skip network setup if the service is not connected.
-                        break
-                    else:
-                        LOG.error("Misconfiguration: Segmentation ID is "
-                                  "missing from the service definition. "
-                                  "Please check the setting for "
-                                  "f5_network_segment_physical_network in "
-                                  "f5-openstack-agent.ini in case neutron "
-                                  "is operating in Hierarhical Port Binding "
-                                  "mode.")
-                        service['loadbalancer']['provisioning_status'] = \
-                            plugin_const.ERROR
-                        raise f5ex.MissingNetwork("Missing segmentation id")
-
-                start_time = time()
-                try:
-                    self.network_builder.prep_service_networking(
-                        service, traffic_group)
-                except Exception as exc:
-                    LOG.error("Exception: icontrol_driver: %s", exc.message)
-                    service['loadbalancer']['provisioning_status'] = \
-                        plugin_const.ERROR
-                    raise
-
-                if time() - start_time > .001:
-                    LOG.debug("    _prep_service_networking "
-                              "took %.5f secs" % (time() - start_time))
-                break
-
-            all_subnet_hints = {}
-            for bigip in self.get_config_bigips():
-                # check_for_delete_subnets:
-                #     keep track of which subnets we should check to delete
-                #     for a deleted vip or member
-                # do_not_delete_subnets:
-                #     If we add an IP to a subnet we must not delete the subnet
-                all_subnet_hints[bigip.device_name] = \
-                    {'check_for_delete_subnets': {},
-                     'do_not_delete_subnets': []}
-
-            LOG.debug("XXXXXXXXX: Pre assure service")
-            self.lbaas_builder.assure_service(service,
-                                              traffic_group,
-                                              all_subnet_hints)
-            LOG.debug("XXXXXXXXX: Post assure service")
-
-            if self.network_builder:
-                start_time = time()
-                self.network_builder.post_service_networking(
-                    service, all_subnet_hints)
-                LOG.debug("    _post_service_networking took %.5f secs" %
-                          (time() - start_time))
-
-            # only delete partition if loadbalancer is being deleted
-            if delete_partition:
-                self.tenant_manager.assure_tenant_cleanup(service,
-                                                          all_subnet_hints)
-
-        except Exception as err:
-            LOG.exception(err)
-
-        finally:
-            self._update_service_status(service)
-
-    def _update_service_status(self, service):
-        """Update status of objects in OpenStack """
-
-        LOG.debug("_update_service_status")
-
-        if not self.plugin_rpc:
-            LOG.error("Cannot update status in Neutron without "
-                      "RPC handler.")
-            return
-
-        if 'members' in service:
-            # Call update_members_status
-            self._update_member_status(service['members'])
-        if 'healthmonitors' in service:
-            # Call update_monitor_status
-            self._update_health_monitor_status(
-                service['healthmonitors']
-            )
-        if 'pools' in service:
-            # Call update_pool_status
-            self._update_pool_status(
-                service['pools']
-            )
-        if 'listeners' in service:
-            # Call update_listener_status
-            self._update_listener_status(service)
-        if 'l7policy_rules' in service:
-            self._update_l7rule_status(service['l7policy_rules'])
-        if 'l7policies' in service:
-            self._update_l7policy_status(service['l7policies'])
-
-        self._update_loadbalancer_status(service)
-
-    def _update_member_status(self, members):
-        """Update member status in OpenStack """
-        for member in members:
-            if 'provisioning_status' in member:
-                provisioning_status = member['provisioning_status']
-                if (provisioning_status == plugin_const.PENDING_CREATE or
-                        provisioning_status == plugin_const.PENDING_UPDATE):
-                        self.plugin_rpc.update_member_status(
-                            member['id'],
-                            plugin_const.ACTIVE,
-                            lb_const.ONLINE
-                        )
-                elif provisioning_status == plugin_const.PENDING_DELETE:
-                    self.plugin_rpc.member_destroyed(
-                        member['id'])
-                elif provisioning_status == plugin_const.ERROR:
-                    self.plugin_rpc.update_member_status(member['id'])
-
-    def _update_health_monitor_status(self, health_monitors):
-        """Update pool monitor status in OpenStack """
-        for health_monitor in health_monitors:
-            if 'provisioning_status' in health_monitor:
-                provisioning_status = health_monitor['provisioning_status']
-                if (provisioning_status == plugin_const.PENDING_CREATE or
-                        provisioning_status == plugin_const.PENDING_UPDATE):
-                        self.plugin_rpc.update_health_monitor_status(
-                            health_monitor['id'],
-                            plugin_const.ACTIVE,
-                            lb_const.ONLINE
-                        )
-                elif provisioning_status == plugin_const.PENDING_DELETE:
-                    self.plugin_rpc.health_monitor_destroyed(
-                        health_monitor['id'])
-                elif provisioning_status == plugin_const.ERROR:
-                    self.plugin_rpc.update_health_monitor_status(
-                        health_monitor['id'])
-
-    @log_helpers.log_method_call
-    def _update_pool_status(self, pools):
-        """Update pool status in OpenStack """
-        for pool in pools:
-            if 'provisioning_status' in pool:
-                provisioning_status = pool['provisioning_status']
-                if (provisioning_status == plugin_const.PENDING_CREATE or
-                        provisioning_status == plugin_const.PENDING_UPDATE):
-                        self.plugin_rpc.update_pool_status(
-                            pool['id'],
-                            plugin_const.ACTIVE,
-                            lb_const.ONLINE
-                        )
-                elif provisioning_status == plugin_const.PENDING_DELETE:
-                    self.plugin_rpc.pool_destroyed(
-                        pool['id'])
-                elif provisioning_status == plugin_const.ERROR:
-                    self.plugin_rpc.update_pool_status(pool['id'])
-
-    @log_helpers.log_method_call
-    def _update_listener_status(self, service):
-        """Update listener status in OpenStack """
-        listeners = service['listeners']
-        for listener in listeners:
-            if 'provisioning_status' in listener:
-                provisioning_status = listener['provisioning_status']
-                if (provisioning_status == plugin_const.PENDING_CREATE or
-                        provisioning_status == plugin_const.PENDING_UPDATE):
-                        self.plugin_rpc.update_listener_status(
-                            listener['id'],
-                            plugin_const.ACTIVE,
-                            listener['operating_status']
-                        )
-                elif provisioning_status == plugin_const.PENDING_DELETE:
-                    self.plugin_rpc.listener_destroyed(
-                        listener['id'])
-                elif provisioning_status == plugin_const.ERROR:
-                    self.plugin_rpc.update_listener_status(
-                        listener['id'],
-                        provisioning_status,
-                        lb_const.OFFLINE)
-
-    @log_helpers.log_method_call
-    def _update_l7rule_status(self, l7rules):
-        """Update l7rule status in OpenStack """
-        for l7rule in l7rules:
-            if 'provisioning_status' in l7rule:
-                provisioning_status = l7rule['provisioning_status']
-                if (provisioning_status == plugin_const.PENDING_CREATE or
-                        provisioning_status == plugin_const.PENDING_UPDATE):
-                        self.plugin_rpc.update_l7rule_status(
-                            l7rule['id'],
-                            l7rule['policy_id'],
-                            plugin_const.ACTIVE,
-                            lb_const.ONLINE
-                        )
-                elif provisioning_status == plugin_const.PENDING_DELETE:
-                    self.plugin_rpc.l7rule_destroyed(
-                        l7rule['id'])
-                elif provisioning_status == plugin_const.ERROR:
-                    self.plugin_rpc.update_l7rule_status(
-                        l7rule['id'], l7rule['policy_id'])
-
-    @log_helpers.log_method_call
-    def _update_l7policy_status(self, l7policies):
-        LOG.debug("_update_l7policy_status")
-        """Update l7policy status in OpenStack """
-        for l7policy in l7policies:
-            if 'provisioning_status' in l7policy:
-                provisioning_status = l7policy['provisioning_status']
-                if (provisioning_status == plugin_const.PENDING_CREATE or
-                        provisioning_status == plugin_const.PENDING_UPDATE):
-                        self.plugin_rpc.update_l7policy_status(
-                            l7policy['id'],
-                            plugin_const.ACTIVE,
-                            lb_const.ONLINE
-                        )
-                elif provisioning_status == plugin_const.PENDING_DELETE:
-                    LOG.debug("calling l7policy_destroyed")
-                    self.plugin_rpc.l7policy_destroyed(
-                        l7policy['id'])
-                elif provisioning_status == plugin_const.ERROR:
-                    self.plugin_rpc.update_l7policy_status(l7policy['id'])
-
-    @log_helpers.log_method_call
-    def _update_loadbalancer_status(self, service):
-        """Update loadbalancer status in OpenStack """
-        loadbalancer = service['loadbalancer']
-        provisioning_status = loadbalancer['provisioning_status']
-
-        if (provisioning_status == plugin_const.PENDING_CREATE or
-                provisioning_status == plugin_const.PENDING_UPDATE):
-            operating_status = (lb_const.ONLINE)
-            if (self.disconnected_service_polling.enabled and
-                    not
-                    self.disconnected_service.is_service_connected(service)):
-                # operational status will be set by the disconnected
-                # service polling thread if that mode is enabled
-                operating_status = lb_const.OFFLINE
-            self.plugin_rpc.update_loadbalancer_status(
-                loadbalancer['id'],
-                plugin_const.ACTIVE,
-                operating_status)
-        elif provisioning_status == plugin_const.PENDING_DELETE:
-            self.plugin_rpc.loadbalancer_destroyed(
-                loadbalancer['id'])
-        elif provisioning_status == plugin_const.ERROR:
-            self.plugin_rpc.update_loadbalancer_status(
-                loadbalancer['id'],
-                provisioning_status,
-                lb_const.OFFLINE)
-        elif provisioning_status == plugin_const.ACTIVE:
-            LOG.debug('Loadbalancer provisioning status is active')
-        else:
-            LOG.error('Loadbalancer provisioning status is invalid')
-
-    def service_to_traffic_group(self, service):
-        # Hash service tenant id to index of traffic group
-        # return which iControlDriver.__traffic_group that tenant is "in?"
-        return self.tenant_to_traffic_group(
-            service['loadbalancer']['tenant_id'])
-
-    def tenant_to_traffic_group(self, tenant_id):
-        # Hash tenant id to index of traffic group
-        hexhash = hashlib.md5(tenant_id).hexdigest()
-        tg_index = int(hexhash, 16) % len(self.__traffic_groups)
-        return self.__traffic_groups[tg_index]
+        pass
 
     def get_bigip(self):
         # Get one consistent big-ip
@@ -1458,105 +675,3 @@ class iControlDriver(LBaaSBaseDriver):
     def get_config_bigips(self):
         # Return a list of big-ips that need to be configured.
         return self.get_all_bigips()
-
-    def get_inbound_throughput(self, bigip, global_statistics=None):
-        return self.stat_helper.get_inbound_throughput(
-            bigip, global_stats=global_statistics)
-
-    def get_outbound_throughput(self, bigip, global_statistics=None):
-        return self.stat_helper.get_outbound_throughput(
-            bigip, global_stats=global_statistics)
-
-    def get_throughput(self, bigip=None, global_statistics=None):
-        return self.stat_helper.get_throughput(
-            bigip, global_stats=global_statistics)
-
-    def get_active_connections(self, bigip=None, global_statistics=None):
-        return self.stat_helper.get_active_connection_count(
-            bigip, global_stats=global_statistics)
-
-    def get_ssltps(self, bigip=None, global_statistics=None):
-        return self.stat_helper.get_active_SSL_TPS(
-            bigip, global_stats=global_statistics)
-
-    def get_node_count(self, bigip=None, global_statistics=None):
-        return len(bigip.tm.ltm.nodes.get_collection())
-
-    def get_clientssl_profile_count(self, bigip=None, global_statistics=None):
-        return ssl_profile.SSLProfileHelper.get_client_ssl_profile_count(bigip)
-
-    def get_tenant_count(self, bigip=None, global_statistics=None):
-        return self.system_helper.get_tenant_folder_count(bigip)
-
-    def get_tunnel_count(self, bigip=None, global_statistics=None):
-        return self.network_helper.get_tunnel_count(bigip)
-
-    def get_vlan_count(self, bigip=None, global_statistics=None):
-        return self.network_helper.get_vlan_count(bigip)
-
-    def get_route_domain_count(self, bigip=None, global_statistics=None):
-        return self.network_helper.get_route_domain_count(bigip)
-
-    def _init_traffic_groups(self, bigip):
-        self.__traffic_groups = self.cluster_manager.get_traffic_groups(bigip)
-        if 'traffic-group-local-only' in self.__traffic_groups:
-            self.__traffic_groups.remove('traffic-group-local-only')
-        self.__traffic_groups.sort()
-
-    def _validate_bigip_version(self, bigip, hostname):
-        # Ensure the BIG-IP® has sufficient version
-        major_version = self.system_helper.get_major_version(bigip)
-        if major_version < f5const.MIN_TMOS_MAJOR_VERSION:
-            raise f5ex.MajorVersionValidateFailed(
-                'Device %s must be at least TMOS %s.%s'
-                % (hostname, f5const.MIN_TMOS_MAJOR_VERSION,
-                   f5const.MIN_TMOS_MINOR_VERSION))
-        minor_version = self.system_helper.get_minor_version(bigip)
-        if minor_version < f5const.MIN_TMOS_MINOR_VERSION:
-            raise f5ex.MinorVersionValidateFailed(
-                'Device %s must be at least TMOS %s.%s'
-                % (hostname, f5const.MIN_TMOS_MAJOR_VERSION,
-                   f5const.MIN_TMOS_MINOR_VERSION))
-        return major_version, minor_version
-
-    @serialized('create_l7policy')
-    @is_connected
-    def create_l7policy(self, l7policy, service):
-        """Create lb l7policy"""
-        LOG.debug("Creating l7policy")
-        self._common_service_handler(service)
-
-    @serialized('update_l7policy')
-    @is_connected
-    def update_l7policy(self, old_l7policy, l7policy, service):
-        """Update lb l7policy"""
-        LOG.debug("Updating l7policy")
-        self._common_service_handler(service)
-
-    @serialized('delete_l7policy')
-    @is_connected
-    def delete_l7policy(self, l7policy, service):
-        """Delete lb l7policy"""
-        LOG.debug("Deleting l7policy")
-        self._common_service_handler(service)
-
-    @serialized('create_l7rule')
-    @is_connected
-    def create_l7rule(self, pool, service):
-        """Create lb l7rule"""
-        LOG.debug("Creating l7rule")
-        self._common_service_handler(service)
-
-    @serialized('update_l7rule')
-    @is_connected
-    def update_l7rule(self, old_l7rule, l7rule, service):
-        """Update lb l7rule"""
-        LOG.debug("Updating l7rule")
-        self._common_service_handler(service)
-
-    @serialized('delete_l7rule')
-    @is_connected
-    def delete_l7rule(self, l7rule, service):
-        """Delete lb l7rule"""
-        LOG.debug("Deleting l7rule")
-        self._common_service_handler(service)
