@@ -14,7 +14,7 @@
 #
 
 
-class LBaaSBaseDriver(object):
+class LBaaSv2BaseDriver(object):
     """Abstract base class for LBaaSv2 Driver as used by Agent Manager."""
 
     def __init__(self):

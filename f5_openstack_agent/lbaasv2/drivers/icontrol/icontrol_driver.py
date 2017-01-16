@@ -16,7 +16,6 @@
 #
 
 import datetime
-import hashlib
 import logging as std_logging
 import urllib2
 
@@ -36,15 +35,16 @@ from oslo_utils import importutils
 
 from f5.bigip import ManagementRoot
 
-from f5_openstack_agent.lbaasv2.drivers.icontrol.cluster_manager import \
-    ClusterManager
 from f5_openstack_agent.lbaasv2.drivers.icontrol import constants_v2 as f5const
 from f5_openstack_agent.lbaasv2.drivers.icontrol import exceptions as f5ex
-from f5_openstack_agent.lbaasv2.drivers.icontrol.system_helper import \
-    SystemHelper
 from f5_openstack_agent.lbaasv2.drivers.icontrol.utils import serialized
+from f5_openstack_agent.lbaasv2.drivers.lbaas_driver_v2 import \
+    LBaaSv2BaseDriver
 
-from f5_openstack_agent.lbaasv2.drivers.lbaas_driver import LBaaSBaseDriver
+from f5_openstack_agent.services.bigip.cm.cluster_manager import \
+    ClusterManager
+from f5_openstack_agent.services.bigip.system.system_helper import \
+    SystemHelper
 
 LOG = logging.getLogger(__name__)
 
@@ -152,7 +152,7 @@ def is_connected(method):
     return wrapper
 
 
-class iControlDriver(LBaaSBaseDriver):
+class iControlDriver(LBaaSv2BaseDriver):
 
     def __init__(self, conf, registerOpts=True):
         # The registerOpts parameter allows a test to
@@ -235,12 +235,13 @@ class iControlDriver(LBaaSBaseDriver):
         self.agent_configurations['device_drivers'] = [self.driver_name]
 
         icontrol_endpoints = {}
-        for host,bigip in self.__bigips.iteritems():
+        for host, bigip in self.__bigips.iteritems():
             ic_host = {}
             ic_host['version'] = self.system_helper.get_version(bigip)
             ic_host['device_name'] = bigip.device_name
             ic_host['platform'] = self.system_helper.get_platform(bigip)
-            ic_host['serial_number'] = self.system_helper.get_serial_number(bigip)
+            ic_host['serial_number'] = \
+                self.system_helper.get_serial_number(bigip)
             icontrol_endpoints[host] = ic_host
 
         self.agent_configurations['tunneling_ips'] = local_ips
@@ -326,7 +327,7 @@ class iControlDriver(LBaaSBaseDriver):
     def _open_bigip_connection(self, hostname):
         """Open bigip connection and initialize device."""
         LOG.debug('Opening iControl connection to %s @ %s' %
-                 (self.conf.icontrol_username, hostname))
+                  (self.conf.icontrol_username, hostname))
 
         return ManagementRoot(hostname,
                               self.conf.icontrol_username,
@@ -480,34 +481,34 @@ class iControlDriver(LBaaSBaseDriver):
     @serialized('create_loadbalancer')
     @is_connected
     def create_loadbalancer(self, loadbalancer, service):
-        """Create virtual server"""
+        """Create loadbalancer."""
         self._common_service_handler(service)
 
     @serialized('update_loadbalancer')
     @is_connected
     def update_loadbalancer(self, old_loadbalancer, loadbalancer, service):
-        """Update virtual server"""
+        """Update loadbalancer."""
         # anti-pattern three args unused.
         self._common_service_handler(service)
 
     @serialized('delete_loadbalancer')
     @is_connected
     def delete_loadbalancer(self, loadbalancer, service):
-        """Delete loadbalancer"""
+        """Delete loadbalancer."""
         LOG.debug("Deleting loadbalancer")
         self._common_service_handler(service, True)
 
     @serialized('create_listener')
     @is_connected
     def create_listener(self, listener, service):
-        """Create virtual server"""
+        """Create virtual server."""
         LOG.debug("Creating listener")
         self._common_service_handler(service)
 
     @serialized('update_listener')
     @is_connected
     def update_listener(self, old_listener, listener, service):
-        """Update virtual server"""
+        """Update virtual server."""
         LOG.debug("Updating listener")
         service['old_listener'] = old_listener
         self._common_service_handler(service)
@@ -515,56 +516,56 @@ class iControlDriver(LBaaSBaseDriver):
     @serialized('delete_listener')
     @is_connected
     def delete_listener(self, listener, service):
-        """Delete virtual server"""
+        """Delete virtual server."""
         LOG.debug("Deleting listener")
         self._common_service_handler(service)
 
     @serialized('create_pool')
     @is_connected
     def create_pool(self, pool, service):
-        """Create lb pool"""
+        """Create lb pool."""
         LOG.debug("Creating pool")
         self._common_service_handler(service)
 
     @serialized('update_pool')
     @is_connected
     def update_pool(self, old_pool, pool, service):
-        """Update lb pool"""
+        """Update lb pool."""
         LOG.debug("Updating pool")
         self._common_service_handler(service)
 
     @serialized('delete_pool')
     @is_connected
     def delete_pool(self, pool, service):
-        """Delete lb pool"""
+        """Delete lb pool."""
         LOG.debug("Deleting pool")
         self._common_service_handler(service)
 
     @serialized('create_member')
     @is_connected
     def create_member(self, member, service):
-        """Create pool member"""
+        """Create pool member."""
         LOG.debug("Creating member")
         self._common_service_handler(service)
 
     @serialized('update_member')
     @is_connected
     def update_member(self, old_member, member, service):
-        """Update pool member"""
+        """Update pool member."""
         LOG.debug("Updating member")
         self._common_service_handler(service)
 
     @serialized('delete_member')
     @is_connected
     def delete_member(self, member, service):
-        """Delete pool member"""
+        """Delete pool member."""
         LOG.debug("Deleting member")
         self._common_service_handler(service)
 
     @serialized('create_health_monitor')
     @is_connected
     def create_health_monitor(self, health_monitor, service):
-        """Create pool health monitor"""
+        """Create pool health monitor."""
         LOG.debug("Creating health monitor")
         self._common_service_handler(service)
 
@@ -572,14 +573,14 @@ class iControlDriver(LBaaSBaseDriver):
     @is_connected
     def update_health_monitor(self, old_health_monitor,
                               health_monitor, service):
-        """Update pool health monitor"""
+        """Update pool health monitor."""
         LOG.debug("Updating health monitor")
         self._common_service_handler(service)
 
     @serialized('delete_health_monitor')
     @is_connected
     def delete_health_monitor(self, health_monitor, service):
-        """Delete pool health monitor"""
+        """Delete pool health monitor."""
         LOG.debug("Deleting health monitor")
         self._common_service_handler(service)
 
@@ -626,7 +627,7 @@ class iControlDriver(LBaaSBaseDriver):
     @serialized('sync')
     @is_connected
     def sync(self, service):
-        """Sync service defintion to device"""
+        """Sync service defintion to device."""
         pass
 
     @serialized('backup_configuration')
