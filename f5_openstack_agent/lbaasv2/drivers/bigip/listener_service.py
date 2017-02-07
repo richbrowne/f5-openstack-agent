@@ -61,23 +61,6 @@ class ListenerServiceBuilder(object):
             tls['partition'] = vip['partition']
 
         service['listener']['operating_status'] = lb_const.ONLINE
-        # Hierarchical Port Binding mode adjustments
-        if not self.disconnected_service.is_service_connected(service) \
-           and \
-           not self.service_adapter.vip_on_common_network(service):
-
-            # start the virtual server on a disconnected network if the neutron
-            # network does not yet exist
-            network_name = DisconnectedService.network_name
-            vip['vlansEnabled'] = True
-            vip.pop('vlansDisabled', None)
-            vip['vlans'] = [
-                '/%s/%s' % (vip['partition'], network_name)
-            ]
-            # strip out references to network pieces that don't yet exist
-            vip.pop('sourceAddressTranslation', None)
-            # the listener is offline until we have a real network
-            service['listener']['operating_status'] = lb_const.OFFLINE
 
         network_id = service['loadbalancer']['network_id']
         for bigip in bigips:
