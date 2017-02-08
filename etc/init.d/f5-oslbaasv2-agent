@@ -20,6 +20,7 @@ F5_AGENT_CONF="/etc/neutron/services/f5/f5-openstack-agent.ini"
 STARTDAEMON_ARGS=""
 DEPEND_RETURN=''
 DEPEND_EXIT=''
+ACTION=$1
 
 [ -r "${F5_AGENT_CONF}" ] && DAEMON_ARGS="${DAEMON_ARGS} --config-file ${F5_AGENT_CONF}"
 [ -r "${NEUTRON_CONF}" ] && DAEMON_ARGS="${DAEMON_ARGS} --config-file ${NEUTRON_CONF}"
@@ -69,7 +70,7 @@ LOGFILE="/var/log/${PROJECT_NAME}/${NAME}.log"
 [ "x$USE_LOGFILE" != "xno" ] && DAEMON_ARGS="$DAEMON_ARGS --log-file=$LOGFILE"
 
 function log_initializing_msg() {
-    msg="Initializing ${ACTION} on ${NAME}..."
+    msg="Begin ${ACTION} on ${NAME}..."
     logger "${msg}"
     echo "${msg}"
 }
@@ -152,8 +153,8 @@ function log_exit_non_status() {
 }
 
 function depend() {
-    python_require="import f5_openstack_agent.lbaas.drivers.bigip.setup"
-    DEPEND_RETURN=$(/usr/bin/env python -c ${python_require})
+    python_require="import f5_openstack_agent.lbaasv2.drivers.bigip.agent"
+    DEPEND_RETURN=$(/usr/bin/env python -c "${python_require}")
     DEPEND_EXIT=$?
     if [ "$?" -eq 0 ]; then
         log_error_msg "All python dependencies for ${NAME} met"
@@ -164,8 +165,9 @@ function depend() {
 
 agent_start() {
     depend
+
     if [ "${DEPEND_EXIT}" ==  0 ]; then
-        start_cmd="start-stop-daemon ${STARTDAEMON_ARGS} --exec ${DAEMON}  -- ${DAEMON_ARGS}"
+        start_cmd="start-stop-daemon ${STARTDAEMON_ARGS} --startas ${DAEMON}  -- ${DAEMON_ARGS}"
         eval $start_cmd
         retval=$?
 
@@ -181,6 +183,11 @@ agent_stop() {
 
     [ $retval -eq 0 ] && rm -f $lockfile
     rm -rf $PIDFILE
+}
+
+agent_status() {
+    start-stop-daemon --status -p $PIDFILE
+    retval=$?
 }
 
 agent_restart() {
@@ -237,8 +244,8 @@ case "$1" in
         log_exit_non_status ${retval}
         ;;
     status)
-	    rh_status
-        log_exit_status ${retvalval}
+	agent_status
+        log_exit_status ${retval}
         ;;
     condrestart|try-restart)
         rh_status_q || exit 0
