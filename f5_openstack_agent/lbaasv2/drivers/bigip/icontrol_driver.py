@@ -768,7 +768,10 @@ class iControlDriver(LBaaSBaseDriver):
     def delete_loadbalancer(self, loadbalancer, service):
         """Delete loadbalancer"""
         LOG.debug("Deleting loadbalancer")
-        return self._common_service_handler(service, True)
+        return self._common_service_handler(
+            service,
+            delete_partition=True,
+            delete_event=True)
 
     @serialized('create_listener')
     @is_connected
@@ -832,7 +835,7 @@ class iControlDriver(LBaaSBaseDriver):
     def delete_member(self, member, service):
         """Delete pool member"""
         LOG.debug("Deleting member")
-        return self._common_service_handler(service)
+        return self._common_service_handler(service, delete_event=True)
 
     @serialized('create_health_monitor')
     @is_connected
@@ -1154,7 +1157,7 @@ class iControlDriver(LBaaSBaseDriver):
         return [lb['lb_id'] for lb in loadbalancers
                 if lb['tenant_id'] == tenant_id]
 
-    def _common_service_handler(self, service, delete_partition=False):
+    def _common_service_handler(self, service, delete_partition=False, delete_event=False):
 
         # Assure that the service is configured on bigip(s)
         start_time = time()
@@ -1195,10 +1198,10 @@ class iControlDriver(LBaaSBaseDriver):
                     self.network_builder.prep_service_networking(
                         service, traffic_group)
                 except f5ex.NetworkNotReady as error:
-                    LOG.debug("Network creation deferred until network"
+                    LOG.debug("Network creation deferred until network "
                               "definition is completed: %s",
                               error.message)
-                    if lb_provisioning_status != plugin_const.PENDING_DELETE:
+                    if not delete_event:
                         do_service_update = False
                         raise error
                 except Exception as error:
@@ -1207,6 +1210,7 @@ class iControlDriver(LBaaSBaseDriver):
                     if lb_provisioning_status != plugin_const.PENDING_DELETE:
                         loadbalancer['provisioning_status'] = \
                             plugin_const.ERROR
+                    if not delete_event:
                         raise error
                 finally:
                     if time() - start_time > .001:
@@ -1260,7 +1264,7 @@ class iControlDriver(LBaaSBaseDriver):
                                                           all_subnet_hints)
 
             if do_service_update:
-                self._update_service_status(service)
+                self.update_service_status(service)
 
             lb_provisioning_status = loadbalancer.get("provisioning_status",
                                                       plugin_const.ERROR)
@@ -1270,7 +1274,7 @@ class iControlDriver(LBaaSBaseDriver):
 
         return lb_pending
 
-    def _update_service_status(self, service):
+    def update_service_status(self, service, timed_out=False):
         """Update status of objects in OpenStack """
 
         LOG.debug("_update_service_status")
@@ -1282,7 +1286,7 @@ class iControlDriver(LBaaSBaseDriver):
 
         if 'members' in service:
             # Call update_members_status
-            self._update_member_status(service['members'])
+            self._update_member_status(service['members'], timed_out)
         if 'healthmonitors' in service:
             # Call update_monitor_status
             self._update_health_monitor_status(
@@ -1301,21 +1305,29 @@ class iControlDriver(LBaaSBaseDriver):
         if 'l7policies' in service:
             self._update_l7policy_status(service['l7policies'])
 
-        self._update_loadbalancer_status(service)
+        self._update_loadbalancer_status(service, timed_out)
 
-    def _update_member_status(self, members):
+    def _update_member_status(self, members, timed_out):
         """Update member status in OpenStack """
         for member in members:
             if 'provisioning_status' in member:
                 provisioning_status = member['provisioning_status']
+
                 if (provisioning_status == plugin_const.PENDING_CREATE or
                         provisioning_status == plugin_const.PENDING_UPDATE):
-                        self.plugin_rpc.update_member_status(
-                            member['id'],
-                            plugin_const.ACTIVE,
-                            lb_const.ONLINE
-                        )
+
+                    if timed_out:
+                        member['provisioning_status'] = plugin_const.ERROR
+                        operating_status = lb_const.OFFLINE
+                    else:
                         member['provisioning_status'] = plugin_const.ACTIVE
+                        operating_status = lb_const.ONLINE
+
+                    self.plugin_rpc.update_member_status(
+                        member['id'],
+                        member['provisioning_status'],
+                        operating_status
+                    )
                 elif provisioning_status == plugin_const.PENDING_DELETE:
                     self.plugin_rpc.member_destroyed(
                         member['id'])
@@ -1431,19 +1443,24 @@ class iControlDriver(LBaaSBaseDriver):
                     self.plugin_rpc.update_l7policy_status(l7policy['id'])
 
     @log_helpers.log_method_call
-    def _update_loadbalancer_status(self, service):
+    def _update_loadbalancer_status(self, service, timed_out):
         """Update loadbalancer status in OpenStack """
-        loadbalancer = service['loadbalancer']
-        provisioning_status = loadbalancer['provisioning_status']
+        loadbalancer = service.get('loadbalancer', {})
+        provisioning_status = loadbalancer.get('provisioning_status',
+                                               plugin_const.ERROR)
 
         if (provisioning_status == plugin_const.PENDING_CREATE or
                 provisioning_status == plugin_const.PENDING_UPDATE):
-            operating_status = (lb_const.ONLINE)
+            if timed_out:
+                operating_status = (lb_const.OFFLINE)
+            else:
+                operating_status = (lb_const.ONLINE)
+
             self.plugin_rpc.update_loadbalancer_status(
                 loadbalancer['id'],
                 plugin_const.ACTIVE,
                 operating_status)
-            loadbalancer['provisioning_status'] = plugin_const.ACTIVE
+
         elif provisioning_status == plugin_const.PENDING_DELETE:
             self.plugin_rpc.loadbalancer_destroyed(
                 loadbalancer['id'])
