@@ -175,6 +175,7 @@ def configure_icd(icd_config, create_mock_rpc):
 
     icontroldriver = iControlDriver(ConfFake(icd_config),
                                     registerOpts=False)
+    icontroldriver.connect()
     icontroldriver.plugin_rpc = create_mock_rpc()
     return icontroldriver
 

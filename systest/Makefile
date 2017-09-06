@@ -140,14 +140,14 @@ run_overcloud_tests:
 	-@echo executing $@
 	$(MAKE) -C . setup_singlebigip_tests &&\
 	$(MAKE) -C . singlebigip
-	$(MAKE) -C . cleanup_singlebigip
+	#$(MAKE) -C . cleanup_singlebigip
 
 run_overcloud_smoke_tests:
 	@echo executing $@
 	# Run the smoke tests and capture the rc, in case tests fail or error out
 	$(MAKE) -C . setup_singlebigip_tests &&\
 	$(MAKE) -C . smoke ; SMOKE_RC=$$? ;\
-	$(MAKE) -C . cleanup_singlebigip ;\
+	#$(MAKE) -C . cleanup_singlebigip ;\
 	exit $$SMOKE_RC
 
 #### TESTSBYINFRA SECTION

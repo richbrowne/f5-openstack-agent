@@ -347,7 +347,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):  # b --> B
         # Setting up outbound (callbacks) communications from agent
         #
 
-        # setup the topic to send oslo messages RPC calls
+        # Setup the topic to send oslo messages RPC calls
         # from this agent to the controller
         topic = constants_v2.TOPIC_PROCESS_ON_HOST_V2
         if self.conf.environment_specific_plugin:
@@ -355,7 +355,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):  # b --> B
             LOG.debug('agent in %s environment will send callbacks to %s'
                       % (self.conf.environment_prefix, topic))
 
-        # create our class we will use to send callbacks to the controller
+        # Create the class we will use to send callbacks to the controller
         # for processing by the driver plugin
         self.plugin_rpc = plugin_rpc.LBaaSv2PluginRPC(
             topic,
@@ -386,7 +386,6 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):  # b --> B
         #
         #  We only establish notification if we care about L2/L3 updates
         #
-
         if not self.conf.f5_global_routed_mode:
 
             # notifications when tunnel endpoints get added
@@ -405,7 +404,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):  # b --> B
                 # notification of SDN topology updates from the
                 # controller by adding to the general consumer list
                 consumers.append(
-                    [topics.L2POPULATION, topics.UPDATE, self.agent_host]
+                    [topics.L2POPULATION, self.agent_host]
                 )
 
             # kick off the whole RPC process by creating

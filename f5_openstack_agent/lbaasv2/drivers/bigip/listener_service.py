@@ -229,7 +229,7 @@ class ListenerServiceBuilder(object):
             if str(ip_address).endswith('%0'):
                 ip_address = ip_address[:-2]
             for bigip in bigips:
-                vses = bigip.tm.ltm.virtuals._get_collection()
+                vses = bigip.tm.ltm.virtuals.get_collection()
                 for vs in vses:
                     if str(vs.destination).startswith(ip_address):
                         vs.delete()
@@ -240,7 +240,7 @@ class ListenerServiceBuilder(object):
                        "listener": listener}
                 vip = self.service_adapter.get_virtual(svc)
                 for bigip in bigips:
-                    vses = bigip.tm.ltm.virtuals._get_collection()
+                    vses = bigip.tm.ltm.virtuals.get_collection()
                     orphaned = True
                     for vs in vses:
                         if vip['destination'] == vs.destination:

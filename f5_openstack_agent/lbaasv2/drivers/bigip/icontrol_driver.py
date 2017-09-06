@@ -20,6 +20,7 @@ import hashlib
 import json
 import logging as std_logging
 import os
+import pdb
 
 from eventlet import greenthread
 from time import strftime
@@ -565,6 +566,7 @@ class iControlDriver(LBaaSBaseDriver):
                     LOG.debug('initializing agent configurations %s'
                               % hostname)
                     self._init_agent_config(bigip)
+
                     # Assure basic BIG-IP HA is operational
                     LOG.debug('validating HA state for %s' % hostname)
                     bigip.status = 'validating_HA'
@@ -741,9 +743,9 @@ class iControlDriver(LBaaSBaseDriver):
             if self.conf.f5_ha_type != 'standalone':
                 self.cluster_manager.disable_auto_sync(
                     device_group_name, bigip)
-
             # validate VTEP SelfIPs
             if not self.conf.f5_global_routed_mode:
+
                 self.network_builder.initialize_tunneling(bigip)
 
             # Turn off tunnel syncing between BIG-IP
@@ -884,7 +886,7 @@ class iControlDriver(LBaaSBaseDriver):
         ic_host['status'] = bigip.status
         ic_host['status_message'] = bigip.status_message
         ic_host['failover_state'] = self.get_failover_state(bigip)
-        if bigip.local_ip:
+        if hasattr(bigip, 'local_ip') and bigip.local_ip:
             ic_host['local_ip'] = bigip.local_ip
         else:
             ic_host['local_ip'] = 'VTEP disabled'
@@ -956,9 +958,7 @@ class iControlDriver(LBaaSBaseDriver):
             LOG.error('Could not recover devices: %s' % exc.message)
 
     def backend_integrity(self):
-        if self.operational:
-            return True
-        return False
+        return self.operational
 
     def generate_capacity_score(self, capacity_policy=None):
         """Generate the capacity score of connected devices """
@@ -1945,6 +1945,10 @@ class iControlDriver(LBaaSBaseDriver):
 
     def tenant_to_traffic_group(self, tenant_id):
         # Hash tenant id to index of traffic group
+        if not len(self.__traffic_groups):
+            raise KeyError(
+                "Traffic groups not initialized, "
+                "icontrol driver possibly not operational")
         hexhash = hashlib.md5(tenant_id).hexdigest()
         tg_index = int(hexhash, 16) % len(self.__traffic_groups)
         return self.__traffic_groups[tg_index]
