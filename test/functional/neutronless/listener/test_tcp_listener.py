@@ -16,6 +16,7 @@
 import json
 import logging
 import os
+import pdb
 import pytest
 import requests
 
@@ -74,6 +75,7 @@ def test_single_pool_tcp_vs(bigip, services, icd_config, icontrol_driver):
 
     # update pool session persistence, APP_COOKIE
     service = service_iter.next()
+    pdb.set_trace()
     icontrol_driver._common_service_handler(service)
     validator.assert_session_persistence(
         listener, 'app_cookie_TEST_' + listener['id'], 'JSESSIONID', folder)
