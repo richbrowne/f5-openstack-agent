@@ -99,7 +99,7 @@ class ServiceModelAdapter(object):
         # transfer session_persistence from pool to listener
         if "pool" in service:
             vip = self.get_session_persistence(service, vip)
-            
+
         self._add_bigip_items(listener, vip)
 
         return vip

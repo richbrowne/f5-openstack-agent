@@ -20,7 +20,6 @@ import hashlib
 import json
 import logging as std_logging
 import os
-import pdb
 
 from eventlet import greenthread
 from time import strftime

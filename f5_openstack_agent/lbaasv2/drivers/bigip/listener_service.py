@@ -15,7 +15,6 @@
 #
 
 from oslo_log import log as logging
-import pdb
 
 from f5_openstack_agent.lbaasv2.drivers.bigip import resource_helper
 from f5_openstack_agent.lbaasv2.drivers.bigip import ssl_profile
@@ -52,7 +51,6 @@ class ListenerServiceBuilder(object):
         and load balancer definition.
         :param bigips: Array of BigIP class instances to create Listener.
         """
-        pdb.set_trace()
         vip = self.service_adapter.get_virtual(service)
         tls = self.service_adapter.get_tls(service)
         if tls:
@@ -65,27 +63,6 @@ class ListenerServiceBuilder(object):
         for bigip in bigips:
             self.service_adapter.get_vlan(vip, bigip, network_id)
 
-            # For TCP listeners, must remove fastL4 profile before adding
-            # adding http/oneconnect profiles.
-            if vip['persist']:
-                vip_persist = vip['persist']
-                persistence_type = vip_persist[0].get('type', "")
-            else:
-                persistence_type = ""
-
-            listener = service['listener']
-            if persistence_type != 'SOURCE_IP':
-                if listener['protocol'] == 'TCP':
-                    self._remove_profile(vip, 'fastL4', bigip)
-                    
-                # HTTP listeners should have http and oneconnect profiles
-                self._add_profile(vip, 'http', bigip)
-                self._add_profile(vip, 'oneconnect', bigip)
-
-                if persistence_type == 'APP_COOKIE' and \
-                        'cookie_name' in persistence:
-                    self._add_cookie_persist_rule(vip, persistence, bigip)
-            
             try:
                 self.vs_helper.create(bigip, vip)
             except HTTPError as err:
@@ -245,7 +222,6 @@ class ListenerServiceBuilder(object):
                 self.vs_helper.update(bigip, vip_persist)
                 LOG.debug("Set persist %s" % vip["name"])
         else:
-            #pdb.set_trace()
             self.remove_session_persistence(service, bigips)
 
     def delete_orphaned_listeners(self, service, bigips):
@@ -362,7 +338,7 @@ class ListenerServiceBuilder(object):
         vip = self.service_adapter.get_virtual_name(service)
         vip["persist"] = []
         vip["fallbackPersistence"] = ""
-        #pdb.set_trace()
+
         listener = service["listener"]
         if listener['protocol'] == 'TCP':
             # Revert VS back to fastL4. Must do an update to replace
