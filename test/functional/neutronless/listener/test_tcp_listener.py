@@ -57,7 +57,7 @@ def test_single_pool_tcp_vs(bigip, services, icd_config, icontrol_driver):
     icontrol_driver._common_service_handler(service)
     validator.assert_virtual_valid(listener, folder)
     validator.assert_virtual_profiles(listener, folder, ['/Common/fastL4'])
-
+    pdb.set_trace()
     # create pool
     service = service_iter.next()
     pool = service['pools'][0]

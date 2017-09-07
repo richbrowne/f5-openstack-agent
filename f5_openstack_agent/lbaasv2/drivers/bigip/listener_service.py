@@ -52,6 +52,7 @@ class ListenerServiceBuilder(object):
         and load balancer definition.
         :param bigips: Array of BigIP class instances to create Listener.
         """
+        pdb.set_trace()
         vip = self.service_adapter.get_virtual(service)
         tls = self.service_adapter.get_tls(service)
         if tls:
@@ -63,6 +64,28 @@ class ListenerServiceBuilder(object):
         network_id = service['loadbalancer']['network_id']
         for bigip in bigips:
             self.service_adapter.get_vlan(vip, bigip, network_id)
+
+            # For TCP listeners, must remove fastL4 profile before adding
+            # adding http/oneconnect profiles.
+            if vip['persist']:
+                vip_persist = vip['persist']
+                persistence_type = vip_persist[0].get('type', "")
+            else:
+                persistence_type = ""
+
+            listener = service['listener']
+            if persistence_type != 'SOURCE_IP':
+                if listener['protocol'] == 'TCP':
+                    self._remove_profile(vip, 'fastL4', bigip)
+                    
+                # HTTP listeners should have http and oneconnect profiles
+                self._add_profile(vip, 'http', bigip)
+                self._add_profile(vip, 'oneconnect', bigip)
+
+                if persistence_type == 'APP_COOKIE' and \
+                        'cookie_name' in persistence:
+                    self._add_cookie_persist_rule(vip, persistence, bigip)
+            
             try:
                 self.vs_helper.create(bigip, vip)
             except HTTPError as err:

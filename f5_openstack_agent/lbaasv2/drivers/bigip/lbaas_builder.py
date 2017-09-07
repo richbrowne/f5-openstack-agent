@@ -181,21 +181,6 @@ class LBaaSBuilder(object):
                     if pool['provisioning_status'] \
                             != plugin_const.PENDING_DELETE:
                         self.pool_builder.create_pool(svc, bigips)
-
-                    # assign pool name to virtual
-                    pool_name = self.service_adapter.init_pool_name(
-                        loadbalancer, pool)
-
-                    # get associated listeners for pool
-                    #listeners = self._get_pool_listeners(service, pool['id'])
-                    #for listener in listeners:
-                    #   svc['listener'] = listener
-                        #self.listener_builder.update_listener_pool(
-                        #    svc, pool_name["name"], bigips)
-
-                        # update virtual sever pool name, session persistence
-                        #self.listener_builder.update_session_persistence(
-                        #    svc, bigips)
                 except Exception as err:
                     pool['provisioning_status'] = plugin_const.ERROR
                     loadbalancer['provisioning_status'] = plugin_const.ERROR

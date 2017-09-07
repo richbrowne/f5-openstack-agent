@@ -93,15 +93,15 @@ class ServiceModelAdapter(object):
             listener["snat_pool_name"] = self.get_folder_name(
                 loadbalancer["tenant_id"])
 
-        # transfer session_persistence from pool to listener
-        if "pool" in service and "session_persistence" in service["pool"]:
-            listener["session_persistence"] = \
-                service["pool"]["session_persistence"]
-
         vip = self._map_virtual(
             loadbalancer, listener, service.get('pool', None))
 
+        # transfer session_persistence from pool to listener
+        if "pool" in service:
+            vip = self.get_session_persistence(service, vip)
+            
         self._add_bigip_items(listener, vip)
+
         return vip
 
     def get_virtual_name(self, service):
@@ -410,22 +410,6 @@ class ServiceModelAdapter(object):
             if listener['protocol'] == 'TCP':
                 virtual_type = 'fastl4'
 
-        if 'session_persistence' in listener:
-            persistence_type = listener['session_persistence']
-            if persistence_type == 'APP_COOKIE':
-                virtual_type = 'standard'
-                vip['persist'] = [{'name': 'app_cookie_' + vip['name']}]
-
-            elif persistence_type == 'SOURCE_IP':
-                vip['persist'] = [{'name': '/Common/source_addr'}]
-
-            elif persistence_type == 'HTTP_COOKIE':
-                vip['persist'] = [{'name': '/Common/cookie'}]
-
-        else:
-            vip['fallbackPersistence'] = ''
-            vip['persist'] = []
-
         if virtual_type == 'fastl4':
             vip['profiles'] = ['/Common/fastL4']
         else:
@@ -491,9 +475,10 @@ class ServiceModelAdapter(object):
         if 'subnets' in service:
             return service['subnets'][subnet_id]
 
-    def get_session_persistence(self, service):
+    def get_session_persistence(self, service, vip=None):
         pool = service['pool']
-        vip = self.get_virtual_name(service)
+        if not vip:
+            vip = self.get_virtual_name(service)
         vip['fallbackPersistence'] = ''
         vip['persist'] = []
         persistence = pool.get('session_persistence', '')
