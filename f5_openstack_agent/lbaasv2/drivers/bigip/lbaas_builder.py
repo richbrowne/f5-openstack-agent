@@ -61,13 +61,13 @@ class LBaaSBuilder(object):
 
         LOG.debug("assuring listeners")
 
-        self._assure_listeners_created(service)
-
-        LOG.debug("assuring pools")
-
         self._assure_pools_created(service)
 
         LOG.debug("assuring monitors")
+
+        self._assure_listeners_created(service)
+
+        LOG.debug("assuring pools")
 
         self._assure_monitors(service)
 
@@ -141,30 +141,14 @@ class LBaaSBuilder(object):
         bigips = self.driver.get_config_bigips()
 
         for listener in listeners:
+            default_pool = self._get_listener_default_pool(
+                listener,
+                service.get('pools', dict()))
+
             svc = {"loadbalancer": loadbalancer,
                    "listener": listener,
-                   "networks": networks}
-
-            # if listener['provisioning_status'] \
-            #             == plugin_const.PENDING_UPDATE:
-            #    try:
-            #        self.listener_builder.update_listener(svc, bigips)
-            #    except Exception as err:
-            #        loadbalancer['provisioning_status'] = plugin_const.ERROR
-            #        listener['provisioning_status'] = plugin_const.ERROR
-            #        raise f5_ex.VirtualServerUpdateException(err.message)
-            #
-            # elif listener['provisioning_status'] != \
-            #        plugin_const.PENDING_DELETE:
-            #    try:
-            #       # create_listener() will do an update if VS exists
-            #        self.listener_builder.create_listener(svc, bigips)
-            #        listener['operating_status'] = \
-            #            svc['listener']['operating_status']
-            #    except Exception as err:
-            #        loadbalancer['provisioning_status'] = plugin_const.ERROR
-            #        listener['provisioning_status'] = plugin_const.ERROR
-            #        raise f5_ex.VirtualServerCreationException(err.message)
+                   "networks": networks,
+                   "pool": default_pool}
 
             if listener['provisioning_status'] != \
                     plugin_const.PENDING_DELETE:
@@ -203,19 +187,32 @@ class LBaaSBuilder(object):
                         loadbalancer, pool)
 
                     # get associated listeners for pool
-                    listeners = self._get_pool_listeners(service, pool['id'])
-                    for listener in listeners:
-                        svc['listener'] = listener
-                        self.listener_builder.update_listener_pool(
-                            svc, pool_name["name"], bigips)
+                    #listeners = self._get_pool_listeners(service, pool['id'])
+                    #for listener in listeners:
+                    #   svc['listener'] = listener
+                        #self.listener_builder.update_listener_pool(
+                        #    svc, pool_name["name"], bigips)
 
                         # update virtual sever pool name, session persistence
-                        self.listener_builder.update_session_persistence(
-                            svc, bigips)
+                        #self.listener_builder.update_session_persistence(
+                        #    svc, bigips)
                 except Exception as err:
                     pool['provisioning_status'] = plugin_const.ERROR
                     loadbalancer['provisioning_status'] = plugin_const.ERROR
                     raise f5_ex.PoolCreationException(err.message)
+
+    def _get_listener_default_pool(self, listener, pools):
+        return_pool = dict()
+
+        default_pool_id = listener.get('default_pool_id', None)
+        if not default_pool_id:
+            return return_pool
+
+        for pool in pools:
+            if pool.get('id', None) == default_pool_id:
+                return pool
+
+        return return_pool
 
     def _get_pool_listeners(self, service, pool_id):
         pools_listeners = []
@@ -414,7 +411,7 @@ class LBaaSBuilder(object):
 
     @staticmethod
     def get_pool_by_id(service, pool_id):
-        if "pools" in service:
+        if pool_id and "pools" in service:
             pools = service["pools"]
             for pool in pools:
                 if pool["id"] == pool_id:

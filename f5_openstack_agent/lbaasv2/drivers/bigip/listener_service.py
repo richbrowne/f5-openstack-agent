@@ -68,7 +68,7 @@ class ListenerServiceBuilder(object):
             except HTTPError as err:
                 if err.response.status_code == 409:
                     LOG.debug("Virtual server already exists..updating")
-                    self.update_listener(service, [bigip])
+                    self.vs_helper.update(bigip, vip)
                 else:
                     LOG.exception("Virtual server creation error: %s" %
                                   err.message)
@@ -222,7 +222,7 @@ class ListenerServiceBuilder(object):
                 self.vs_helper.update(bigip, vip_persist)
                 LOG.debug("Set persist %s" % vip["name"])
         else:
-            pdb.set_trace()
+            #pdb.set_trace()
             self.remove_session_persistence(service, bigips)
 
     def delete_orphaned_listeners(self, service, bigips):
@@ -339,7 +339,7 @@ class ListenerServiceBuilder(object):
         vip = self.service_adapter.get_virtual_name(service)
         vip["persist"] = []
         vip["fallbackPersistence"] = ""
-        pdb.set_trace()
+        #pdb.set_trace()
         listener = service["listener"]
         if listener['protocol'] == 'TCP':
             # Revert VS back to fastL4. Must do an update to replace
