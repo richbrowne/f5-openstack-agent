@@ -41,12 +41,6 @@ POL_CREATE_PATH = \
 POL_DELETE_PATH = \
     'f5_openstack_agent.lbaasv2.drivers.bigip.l7policy_service' \
     '.L7PolicyService.delete_l7policy'
-RULE_CREATE_PATH = \
-    'f5_openstack_agent.lbaasv2.drivers.bigip.l7policy_service' \
-    '.L7PolicyService.create_l7rule'
-RULE_DELETE_PATH = \
-    'f5_openstack_agent.lbaasv2.drivers.bigip.l7policy_service' \
-    '.L7PolicyService.delete_l7rule'
 VS_POOL_UPDATE_PATH = \
     'f5_openstack_agent.lbaasv2.drivers.bigip.listener_service' \
     '.ListenerServiceBuilder.update_listener_pool'
@@ -772,7 +766,7 @@ class TestLbaasBuilder(TestLBaaSBuilderConstructor):
             str('f5_openstack_agent.lbaasv2.drivers.bigip.pool_service.'
                 'PoolServiceBuilder')
         l7service = \
-            str('f5_openstack_agent.lbaasv2.drivers.bigip.pool_service.'
+            str('f5_openstack_agent.lbaasv2.drivers.bigip.l7policy_service.'
                 'L7PolicyService')
         mock_listener = Mock()
         mock_pool = Mock()
@@ -1242,13 +1236,17 @@ class TestLbaasBuilder(TestLBaaSBuilderConstructor):
 
         svc = l7policy_create_service
         builder = LBaaSBuilder(mock.MagicMock(), mock.MagicMock())
-        builder.is_esd = Mock(return_value=False)
+        builder.esd = Mock()
+        builder.esd.is_esd = Mock(return_value=False)
         builder._assure_l7policies_created(svc)
-        assert svc['l7policies'][0]['provisioning_status'] == 'ACTIVE'
+
+        for policy in svc['l7policies']:
+            assert policy['provisioning_status'] == 'ACTIVE'
+        # assert svc['l7policies'][0]['provisioning_status'] == 'ACTIVE'
         assert svc['loadbalancer']['provisioning_status'] == 'ACTIVE'
 
-    @pytest.mark.skip(reason="mock lbaas object not returning a valid policy")
-    def test_create_policy_error_status(self, l7policy_create_service):
+    def test_create_policy_no_rules_error_status(
+            self, l7policy_create_service):
         """provisioning_status is ERROR after policy creation fails."""
 
         svc = l7policy_create_service
@@ -1256,18 +1254,20 @@ class TestLbaasBuilder(TestLBaaSBuilderConstructor):
             mock_pol_create.return_value = \
                 MockHTTPError(MockHTTPErrorResponse500(), 'Server failure.')
             builder = LBaaSBuilder(mock.MagicMock(), mock.MagicMock())
-            builder.is_esd = Mock(return_value=False)
+            builder.esd = Mock()
+            builder.esd.is_esd = Mock(return_value=False)
 
             builder._assure_l7policies_created(svc)
-            assert svc['l7policies'][0]['provisioning_status'] == 'ERROR'
-            assert svc['loadbalancer']['provisioning_status'] == 'ERROR'
+            assert svc['l7policies'][0]['provisioning_status'] == 'ACTIVE'
+            assert not mock_pol_create.called
 
     def test_delete_policy(self, l7policy_delete_service):
         """provisioning_status is PENDING_DELETE when deleteing policy."""
 
         svc = l7policy_delete_service
         builder = LBaaSBuilder(mock.MagicMock(), mock.MagicMock())
-        builder.is_esd = Mock(return_value=False)
+        builder.esd = Mock()
+        builder.esd.is_esd = Mock(return_value=False)
         builder._assure_l7policies_deleted(svc)
         assert svc['l7policies'][0]['provisioning_status'] == 'PENDING_DELETE'
         assert svc['loadbalancer']['provisioning_status'] == 'ACTIVE'
@@ -1280,7 +1280,8 @@ class TestLbaasBuilder(TestLBaaSBuilderConstructor):
             mock_pol_delete.return_value = \
                 MockHTTPError(MockHTTPErrorResponse409(), 'Not found.')
             builder = LBaaSBuilder(mock.MagicMock(), mock.MagicMock())
-            builder.is_esd = Mock(return_value=False)
+            builder.esd = Mock()
+            builder.esd.is_esd = Mock(return_value=False)
             builder._assure_l7policies_deleted(svc)
             assert svc['l7policies'][0]['provisioning_status'] == 'ERROR'
             # assert svc['loadbalancer']['provisioning_status'] == 'ERROR'
